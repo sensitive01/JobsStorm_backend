@@ -57,7 +57,7 @@ const jobSchema = new mongoose.Schema(
     description: { type: String, },
     category: { type: String, },
     position: { type: String }, // Junior, Senior, etc
-    openings: { type: Number }, // vacancy
+    vacancy: { type: Number }, // vacancy
     jobType: { type: String }, // Full-time, Part-time
     experienceLevel: { type: String },
     educationLevel: { type: String },
@@ -66,6 +66,7 @@ const jobSchema = new mongoose.Schema(
     locationTypes:[],
     isRemote:{type:Boolean},
     jobDescription:{type: String},
+    companyWebsite:{type:String},
 
     // Salary
     salaryFrom: { type: Number },

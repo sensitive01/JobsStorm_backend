@@ -95,6 +95,7 @@ employerRoute.post('/postjob/:empId', jobController.createJob);
 employerRoute.get("/fetchjob/:employid", jobController.getJobsByEmployee);
 employerRoute.get("/viewjobs/:id", jobController.getJobById);
 employerRoute.put('/editjob/:id', jobController.updateJobById);
+employerRoute.put('/editjob-status/:id', jobController.changeJobStatus);
 
 
 

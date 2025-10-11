@@ -1296,8 +1296,52 @@ const updateAvailabilityStatus = async (req, res) => {
   }
 };
 
+
+const getMyName = async (req, res) => {
+  try {
+    const { userId } = req.params; // or from req.body / req.user depending on your setup
+
+    // Fetch the user by ID, only return userName field
+    const user = await userModel.findOne(
+      { _id: userId },
+      { userName: 1, _id: 0 }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      userName: user.userName,
+    });
+  } catch (err) {
+    console.error("Error fetching user name:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching user name",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //hbh
 module.exports = {
+  getMyName,
   addwithouttoeken,
   addJobAlert,
   getDesiredJobAlerts,

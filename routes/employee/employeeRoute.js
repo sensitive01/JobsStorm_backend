@@ -63,6 +63,8 @@ employeeRoute.put(
 employeeRoute.put('/uploadintroaudio/:employeeId', dynamicUploadMiddleware, employeeController.uploadIntroAudio);
 
 employeeRoute.get('/fetchallemployee', employeeController.getAllEmployees);
+employeeRoute.get('/get-my-name/:userId', employeeController.getMyName);
+
 // Upload file to Cloudinary
 employeeRoute.put(
   '/uploadfile/:employid',

@@ -43,6 +43,41 @@ const updateJobById = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
+
+
+
+
+
+
+const changeJobStatus = async (req, res) => {
+  try {
+    const { id } = req.params; // Job _id from URL
+
+    const updatedJob = await Job.findByIdAndUpdate(
+      id,
+      { isActive: false, updatedAt: Date.now() },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedJob) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.status(200).json({
+      message: "Job deactivated successfully",
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error("Error updating job:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+
+
+
+
 const generateJobId = async () => {
   let unique = false;
   let jobId;
@@ -992,6 +1027,7 @@ const updateJobActiveStatus = async (req, res) => {
 };
 
 module.exports = {
+  changeJobStatus,
   updateJobActiveStatus,
   toggleSaveJob,
   fetchAllJobs,
