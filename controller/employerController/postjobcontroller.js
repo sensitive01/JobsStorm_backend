@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Job = require("../../models/jobSchema");
 const Employer = require("../../models/employerSchema");
-const SavedCandidate = require('../../models/savedcandiSchema');
+const SavedCandidate = require("../../models/savedcandiSchema");
 const getJobTitleByJobId = async (req, res) => {
   try {
     const jobId = req.params.jobId;
@@ -24,7 +24,8 @@ const getJobTitleByJobId = async (req, res) => {
 const updateJobById = async (req, res) => {
   try {
     const { id } = req.params; // _id from URL
-    const updatedData = req.body; // New data to overwrite existing
+    const {updatedData} = req.body; // New data to overwrite existing
+    console.log("updatedData",updatedData)
 
     const updatedJob = await Job.findByIdAndUpdate(
       id,
@@ -42,43 +43,59 @@ const updateJobById = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
+const generateJobId = async () => {
+  let unique = false;
+  let jobId;
+
+  while (!unique) {
+    // Generate a random 5-digit number
+    const randomNumber = Math.floor(10000 + Math.random() * 90000);
+    jobId = `JS${randomNumber}`;
+
+    // Check if jobId already exists in DB
+    const existingJob = await Job.findOne({ jobId });
+    if (!existingJob) {
+      unique = true;
+    }
+  }
+
+  return jobId;
+};
 
 const createJob = async (req, res) => {
   try {
-    const jobData = req.body;
-    console.log("jobData", jobData);
+    const { jobData } = req.body;
+    console.log("jobData",jobData)
+    const { empId } = req.params;
 
-    console.log("jobData", jobData);
-
-    // Find the employer by employid
-    // const employer = await Employer.findOne({ _id: jobData.employid });
-    const employer = await Employer.findOne({
-      $or: [{ _id: jobData.employid }, { userEmail: jobData.contactEmail }],
-    });
+    const employer = await Employer.findById(empId);
 
     if (!employer) {
       return res.status(404).json({ message: "Employer not found" });
     }
 
-    // Check if totaljobpostinglimit is greater than 0
     if (employer.totaljobpostinglimit <= 0) {
-      return res
-        .status(403)
-        .json({
-          message:
-            "Job posting limit reached. Please upgrade your subscription.",
-        });
+      return res.status(403).json({
+        message: "Job posting limit reached. Please upgrade your subscription.",
+      });
     }
 
-    // Create the new job
-    const newJob = new Job(jobData);
+    // Generate a unique Job ID
+    const jobId = await generateJobId();
+
+    // Include employer ID and jobId in the job data
+    const newJob = new Job({
+      ...jobData,
+      employId: empId, // make sure your Job schema has an "employer" field
+      jobId, // make sure your Job schema has a "jobId" field
+    });
+
     const savedJob = await newJob.save();
 
-    // Decrease the totaljobpostinglimit by 1
+    // Decrease the job posting limit
     employer.totaljobpostinglimit -= 1;
     await employer.save();
 
-    // Return the saved job
     res.status(201).json(savedJob);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -198,7 +215,7 @@ const getJobsByEmployee = async (req, res) => {
   try {
     const jobs = await Job.aggregate([
       {
-        $match: { employid: req.params.employid },
+        $match: { employId: req.params.employid },
       },
       {
         $sort: { createdAt: -1 },
@@ -247,7 +264,6 @@ const getJobsByEmployee = async (req, res) => {
   }
 };
 
-
 const getAppliedCandidates = async (req, res) => {
   const jobId = req.params.id;
 
@@ -260,22 +276,23 @@ const getAppliedCandidates = async (req, res) => {
     }
 
     // 2️⃣ Fetch saved candidates for this employer
-    const savedCandidatesDoc = await SavedCandidate.findOne({ employerId: job.employid });
+    const savedCandidatesDoc = await SavedCandidate.findOne({
+      employerId: job.employid,
+    });
     const savedEmployeeIds = savedCandidatesDoc
-      ? savedCandidatesDoc.employeeIds.map(id => id.toString())
+      ? savedCandidatesDoc.employeeIds.map((id) => id.toString())
       : [];
 
     // 3️⃣ Map applications to mark favourite
-    const applications = job.applications.map(app => ({
+    const applications = job.applications.map((app) => ({
       ...app.toObject(),
-      favourite: savedEmployeeIds.includes(app.applicantId)
+      favourite: savedEmployeeIds.includes(app.applicantId),
     }));
 
     res.status(200).json({
       success: true,
-      applications
+      applications,
     });
-
   } catch (error) {
     console.error("Error fetching applied candidates:", error);
     res.status(500).json({
@@ -298,24 +315,25 @@ const shortlistcand = async (req, res) => {
     }
 
     // 2️⃣ Fetch saved candidates for this employer (using job.employid)
-    const savedCandidatesDoc = await SavedCandidate.findOne({ employerId: job.employid });
+    const savedCandidatesDoc = await SavedCandidate.findOne({
+      employerId: job.employid,
+    });
     const savedEmployeeIds = savedCandidatesDoc
-      ? savedCandidatesDoc.employeeIds.map(id => id.toString())
+      ? savedCandidatesDoc.employeeIds.map((id) => id.toString())
       : [];
 
     // 3️⃣ Map applications to mark favourites and filter non-pending
     const applications = job.applications
-      .map(app => ({
+      .map((app) => ({
         ...app.toObject(),
-        favourite: savedEmployeeIds.includes(app.applicantId)
+        favourite: savedEmployeeIds.includes(app.applicantId),
       }))
-      .filter(app => app.employapplicantstatus !== "Pending");
+      .filter((app) => app.employapplicantstatus !== "Pending");
 
     res.status(200).json({
       success: true,
-      applications
+      applications,
     });
-
   } catch (error) {
     console.error("Error fetching applied candidates:", error);
     res.status(500).json({
@@ -478,12 +496,10 @@ const updateFavStatusforsavecand = async (req, res) => {
     );
 
     if (result.modifiedCount === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Application not found or favourite not updated",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Application not found or favourite not updated",
+      });
     }
 
     return res.json({
@@ -500,9 +516,11 @@ const getNonPendingApplicantsByEmployId = async (req, res) => {
     const { employid } = req.params;
 
     // 1️⃣ Find saved candidates for this employer
-    const savedCandidatesDoc = await SavedCandidate.findOne({ employerId: employid });
+    const savedCandidatesDoc = await SavedCandidate.findOne({
+      employerId: employid,
+    });
     const savedEmployeeIds = savedCandidatesDoc
-      ? savedCandidatesDoc.employeeIds.map(id => id.toString())
+      ? savedCandidatesDoc.employeeIds.map((id) => id.toString())
       : [];
 
     // 2️⃣ Find jobs by employid and select jobTitle and applications
@@ -524,7 +542,6 @@ const getNonPendingApplicantsByEmployId = async (req, res) => {
       success: true,
       data: nonPendingApplications,
     });
-
   } catch (error) {
     console.error("Error fetching applicants:", error);
     res.status(500).json({

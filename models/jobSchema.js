@@ -1,112 +1,108 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
+
+// Application schema for job applicants
 const applicationSchema = new mongoose.Schema({
   applicantId: { type: String },
   firstName: { type: String },
   email: { type: String },
   phone: { type: String },
-    experience: { type: String },
-      notes: { type: String },
-       interviewtype : { type: String },
-        interviewdate : { type: String },
-            interviewtime : { type: String },
-                interviewlink : { type: String },
-                 lastupdatestatusdate : { type: String },
-                    interviewvenue : { type: String },
-        statusHistory: [
+  experience: { type: String },
+  notes: { type: String },
+  interviewType: { type: String },
+  interviewDate: { type: Date },
+  interviewTime: { type: String },
+  interviewLink: { type: String },
+  interviewVenue: { type: String },
+  lastUpdateStatusDate: { type: Date },
+  statusHistory: [
     {
-       interviewtype : { type: String },
-        interviewdate : { type: String },
-            interviewtime : { type: String },
-                interviewlink : { type: String },
-                    interviewvenue : { type: String },
+      interviewType: { type: String },
+      interviewDate: { type: Date },
+      interviewTime: { type: String },
+      interviewLink: { type: String },
+      interviewVenue: { type: String },
       status: { type: String },
       notes: { type: String },
-      updatedAt: { type: Date, default: Date.now }
-    }
+      updatedAt: { type: Date, default: Date.now },
+    },
   ],
-  currentcity: { type: String },
-  jobrole:{ type: String },
+  currentCity: { type: String },
+  jobRole: { type: String },
   resume: {
     name: { type: String },
-    url: { type: String }
+    url: { type: String },
   },
   favourite: { type: Boolean, default: false },
   status: { type: String },
-   profileurl: { type: String },
-    employapplicantstatus: { type: String, default: 'Pending' },
+  profileUrl: { type: String },
+  employApplicantStatus: { type: String, default: "Pending" },
   appliedDate: { type: Date, default: Date.now },
-  notes: { type: String }
+  notes: { type: String },
 });
-const savedjobs = new mongoose.Schema({
+
+// Saved jobs schema
+const savedJobsSchema = new mongoose.Schema({
   applicantId: { type: String },
-  
   saved: { type: Boolean, default: false },
- 
-});
-const jobSchema = new mongoose.Schema({
-  // Basic Information
-  companyName: { type: String, },
-  employid: { type: String, },
-  jobTitle: { type: String,  },
-  description: { type: String,  },
-  category: { type: String,  },
-   applydatetime: { type: String,  },
-  // Salary Information
-  salaryFrom: { type: String, },
-  salaryTo: { type: String,  },
-  salaryType: { type: String, },
-  applications: [applicationSchema],
-  saved: [savedjobs],
-  // Job Details
-  jobType: { 
-    type: String, 
-  },
-  experienceLevel: { 
-    type: String, 
-  },
-  educationLevel: { 
-    type: String, 
-  },
-  openings: { type: String,  },
-  
-  // Location Information
-  locationTypes: { 
-    type: [String], 
-  
-  },
-  location: { type: String },
-  isRemote: { type: Boolean, default: false },
-  
-  // Skills and Benefits
-  skills: { type: [String], default: [] },
-  benefits: { type: String },
-  
-  // Contact Information
-  contactEmail: { 
-    type: String, 
-  
-  
-  },
-  contactPhone: { type: String },
-  companyUrl: { type: String },
-  
-  // Application Details
-  applicationInstructions: { type: String },
-  deadline: { type: Date },
-  priority: { 
-    type: String, 
-    
-  },
-   status: { type: String, },
-  // Metadata
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
- postingstatus: { type: String, default: 'pending' },
-  isActive: { type: Boolean, default: true }
 });
 
+// Main Job schema
+const jobSchema = new mongoose.Schema(
+  {
+    jobId:{type:String},
+    // Basic Info
+    companyName: { type: String, },
+    employId: { type: String }, 
+    jobTitle: { type: String, },
+    description: { type: String, },
+    category: { type: String, },
+    position: { type: String }, // Junior, Senior, etc
+    openings: { type: Number }, // vacancy
+    jobType: { type: String }, // Full-time, Part-time
+    experienceLevel: { type: String },
+    educationLevel: { type: String },
+    responsibilities:[],
+    qualifications:[],
+    locationTypes:[],
+    isRemote:{type:Boolean},
+    jobDescription:{type: String},
 
+    // Salary
+    salaryFrom: { type: Number },
+    salaryTo: { type: Number },
+    salaryType: { type: String }, // monthly, yearly, etc
 
-const Job = mongoose.model('Job', jobSchema);
+    // Application info
+    applicationInstructions: { type: String },
+    deadline: { type: Date },
+
+    // Location info
+    location: { type: String },
+    companyAddress: { type: String },
+    locationTypes: { type: [String], default: [] }, // On-site, Remote, Hybrid
+    isRemote: { type: Boolean, default: false },
+
+    // Benefits & Skills
+    benefits: { type: String },
+    skills: { type: [String], default: [] },
+
+    // Contact info
+    contactEmail: { type: String, },
+    contactPhone: { type: String },
+    companyUrl: { type: String },
+
+    // Metadata
+    applications: [applicationSchema],
+    saved: [savedJobsSchema],
+    status: { type: String, default: "open" },
+    postingStatus: { type: String, default: "pending" },
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+); // auto-manage createdAt and updatedAt
+
+const Job = mongoose.model("Job", jobSchema);
 
 module.exports = Job;

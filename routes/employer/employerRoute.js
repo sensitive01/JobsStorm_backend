@@ -78,16 +78,32 @@ const dynamicUploadMiddlewareNew = (req, res, next) => {
     return next();
   });
 };
+employerRoute.post('/signup', employerController.signUp);
+employerRoute.post('/login', employerController.login);
 
-employerRoute.put('/decreaseProfileView/:employerId/:employeeId', employerController.decreaseProfileView);
-employerRoute.put('/decrease/:employerId/:employeeId', employerController.decreaseResumeDownload);
 employerRoute.post('/sendemailotp', emailverifycontroller.sendOtpToEmail);
 employerRoute.post('/verifyemailotp', emailverifycontroller.verifyEmailOtp);
 
-employerRoute.post('/signup', employerController.signUp);
+
+
+
+
+employerRoute.put('/decreaseProfileView/:employerId/:employeeId', employerController.decreaseProfileView);
+employerRoute.put('/decrease/:employerId/:employeeId', employerController.decreaseResumeDownload);
+
+employerRoute.post('/postjob/:empId', jobController.createJob);
+employerRoute.get("/fetchjob/:employid", jobController.getJobsByEmployee);
+employerRoute.get("/viewjobs/:id", jobController.getJobById);
+employerRoute.put('/editjob/:id', jobController.updateJobById);
+
+
+
+
+
+
+
 
 // Email/Mobile Login
-employerRoute.post('/login', employerController.login);
 
 // Google Sign-In
 employerRoute.post('/google', employerController.googleAuth);
@@ -99,10 +115,7 @@ employerRoute.put("/updateemployer/:id", employerController.updateEmployerDetail
 employerRoute.put('/uploadprofilepic/:employid', dynamicUploadMiddleware, employerController.updateProfilePicture);
 
 
-employerRoute.post('/postjob', jobController.createJob);
 employerRoute.get('/fetchjobs', jobController.getAllJobs);
-employerRoute.get("/viewjobs/:id", jobController.getJobById);
-employerRoute.get("/fetchjob/:employid", jobController.getJobsByEmployee);
 employerRoute.get("/fetchappliedcand/:id", jobController.getAppliedCandidates);
 employerRoute.get("/fetchfavcand/:employid", jobController.getFavouriteCandidates);
 
@@ -126,7 +139,6 @@ employerRoute.get('/fetchSavedJobs/:employid', jobController.fetchSavedJobslist)
 employerRoute.get('/fetchschooljobs', jobController.getSchoolEmployerJobs);
 employerRoute.get('/fetchcompanyjobs', jobController.getcompnanyEmployerJobs);
 employerRoute.get('/fetchjobtitle/:jobId', jobController.getJobTitleByJobId);
-employerRoute.put('/editjob/:id', jobController.updateJobById);
 
 employerRoute.post("/createmeeting", meetingController.create);
 employerRoute.get("/fetchmeeting/:id", meetingController.getMeetingsByVendor);
