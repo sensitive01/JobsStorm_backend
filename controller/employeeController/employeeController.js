@@ -677,9 +677,9 @@ const getProfileCompletion = async (req, res) => {
 
 const userForgotPassword = async (req, res) => {
   try {
-    const { userMobile } = req.body;
+    const { userEmail } = req.body;
 
-    const existUser = await userModel.findOne({ userMobile: userMobile });
+    const existUser = await userModel.findOne({ userEmail: userEmail });
 
     if (!existUser) {
       return res.status(404).json({
@@ -687,8 +687,8 @@ const userForgotPassword = async (req, res) => {
       });
     }
 
-    if (!userMobile) {
-      return res.status(400).json({ message: "Mobile number is required" });
+    if (!userEmail) {
+      return res.status(400).json({ message: "User email id is required" });
     }
 
     const otp = generateOTP();
