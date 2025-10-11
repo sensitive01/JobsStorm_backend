@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const Job = require("../../models/jobSchema");
 const userModel = require("../../models/employeeschema");
-const Employee = require('../../models/employeeschema');
+const Employee = require("../../models/employeeschema");
 
 const generateOTP = require("../../utils/generateOTP");
 const jwtDecode = require("jwt-decode");
@@ -28,10 +28,13 @@ const JobFilter = require("../../models/jobAlertModal");
 const signUp = async (req, res) => {
   try {
     console.log("req.body", req.body);
-    const { userName, userMobile, userEmail, userPassword, referralCode } =
+    const { userName, userMobile, userEmail, userPassword, referralCode ,countryCode} =
       req.body;
-    const mobile = parseInt(userMobile);
 
+    // Clean and keep mobile as string
+    const mobile = userMobile.replace(/[^0-9]/g, "");
+
+    // Check if user already exists
     const existUser = await userModel.findOne({
       $or: [{ userMobile: mobile }, { userEmail }],
     });
@@ -45,18 +48,19 @@ const signUp = async (req, res) => {
     const newUser = new userModel({
       uuid: uuidv4(),
       userName,
-      userMobile: mobile,
+      userMobile: mobile, // ✅ now string
       userEmail,
       userPassword: hashedPassword,
       verificationstatus: "pending",
       blockstatus: "unblock",
       emailverifedstatus: true,
+      countryCode
     });
 
     // Generate and assign referral code
     newUser.referralCode = newUser.generateReferralCode();
 
-    let referralApplied = false;
+    // Handle referral
     if (referralCode && referralCode.trim() !== "") {
       const referrer = await userModel.findOne({
         referralCode: referralCode.trim(),
@@ -64,13 +68,9 @@ const signUp = async (req, res) => {
 
       if (referrer) {
         newUser.referredBy = referrer._id;
-        referralApplied = true;
 
         await userModel.findByIdAndUpdate(referrer._id, {
-          $inc: {
-            referralCount: 1,
-            referralRewards: 100,
-          },
+          $inc: { referralCount: 1, referralRewards: 100 },
         });
       }
     }
@@ -741,10 +741,10 @@ const userChangePassword = async (req, res) => {
   try {
     console.log("Welcome to user change password");
 
-    const { userMobile, password, confirmPassword } = req.body;
+    const { userEmail, password, confirmPassword } = req.body;
 
     // Validate inputs
-    if (!userMobile || !password || !confirmPassword) {
+    if (!userEmail || !password || !confirmPassword) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -757,7 +757,7 @@ const userChangePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Find the user by contact number
-    const user = await userModel.findOne({ userMobile: userMobile });
+    const user = await userModel.findOne({ userEmail: userEmail });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -1101,7 +1101,7 @@ const getDesiredJobAlerts = async (req, res) => {
 
     const jobAlerts = await Job.find(query);
 
-    return res.status(200).json({ jobAlerts ,userJobPreference});
+    return res.status(200).json({ jobAlerts, userJobPreference });
   } catch (err) {
     console.error("Error getting desired job alerts:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1114,12 +1114,16 @@ const getDesiredJobAlertswithouttoken = async (req, res) => {
 
     // Validate userId presence
     if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID is required" });
     }
 
     const userJobPreference = await JobFilter.findOne({ userId });
     if (!userJobPreference) {
-      return res.status(404).json({ success: false, message: "No job preference found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No job preference found" });
     }
 
     const query = {
@@ -1158,12 +1162,16 @@ const getDesiredJobAlertswithouttoken = async (req, res) => {
 
     // If no filters available
     if (query.$or.length === 0) {
-      return res.status(200).json({ success: true, jobAlerts: [], userJobPreference });
+      return res
+        .status(200)
+        .json({ success: true, jobAlerts: [], userJobPreference });
     }
 
     const jobAlerts = await Job.find(query);
 
-    return res.status(200).json({ success: true, jobAlerts, userJobPreference });
+    return res
+      .status(200)
+      .json({ success: true, jobAlerts, userJobPreference });
   } catch (err) {
     console.error("Error getting desired job alerts:", err);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -1186,7 +1194,9 @@ const addwithouttoeken = async (req, res) => {
 
     // Validate userId presence
     if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID is required" });
     }
 
     // Find by userId and update, or create new if not exists
@@ -1219,29 +1229,27 @@ const addwithouttoeken = async (req, res) => {
   }
 };
 
-
-
 const fetchAvailabilityStatus = async (req, res) => {
   try {
     const employeeId = req.params.employeeId;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({ message: 'Invalid employee ID' });
+      return res.status(400).json({ message: "Invalid employee ID" });
     }
 
-    const employee = await Employee.findById(employeeId).select('isAvailable');
+    const employee = await Employee.findById(employeeId).select("isAvailable");
 
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     res.status(200).json({
-      message: 'Availability status fetched successfully',
+      message: "Availability status fetched successfully",
       isAvailable: employee.isAvailable || false,
     });
   } catch (error) {
-    console.error('Error fetching availability status:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error("Error fetching availability status:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
@@ -1251,11 +1259,13 @@ const updateAvailabilityStatus = async (req, res) => {
     const { isAvailable } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-      return res.status(400).json({ message: 'Invalid employee ID' });
+      return res.status(400).json({ message: "Invalid employee ID" });
     }
 
-    if (typeof isAvailable !== 'boolean') {
-      return res.status(400).json({ message: 'isAvailable must be a boolean value' });
+    if (typeof isAvailable !== "boolean") {
+      return res
+        .status(400)
+        .json({ message: "isAvailable must be a boolean value" });
     }
 
     const employee = await Employee.findByIdAndUpdate(
@@ -1265,14 +1275,14 @@ const updateAvailabilityStatus = async (req, res) => {
         updatedAt: Date.now(),
       },
       { new: true, runValidators: true }
-    ).select('isAvailable userName userEmail');
+    ).select("isAvailable userName userEmail");
 
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     res.status(200).json({
-      message: 'Availability status updated successfully',
+      message: "Availability status updated successfully",
       employee: {
         id: employee._id,
         userName: employee.userName,
@@ -1281,11 +1291,10 @@ const updateAvailabilityStatus = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error updating availability status:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error("Error updating availability status:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 //hbh
 module.exports = {
@@ -1315,6 +1324,6 @@ module.exports = {
   appliedjobsfetch,
   updateProfile,
   candidateChangePassword,
-    fetchAvailabilityStatus,      // <-- Add this
-  updateAvailabilityStatus,  
+  fetchAvailabilityStatus, // <-- Add this
+  updateAvailabilityStatus,
 };

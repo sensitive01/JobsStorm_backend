@@ -13,7 +13,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const appleKeysClient = jwksClient({
   jwksUri: "https://appleid.apple.com/auth/keys",
 });
-const jobModel = require("../../models/jobSchema")
+const jobModel = require("../../models/jobSchema");
 
 const generateUserUUID = () => uuidv4(); // Define the function
 
@@ -152,42 +152,28 @@ const generateUserUUID = () => uuidv4(); // Define the function
 const signUp = async (req, res) => {
   try {
     let {
-      employerType,
-      schoolName,
-      userMobile,
-      lastName,
-      firstName,
-      userEmail,
-      userPassword,
-      referralCode = "",
+      companyName,
+      contactPerson,
+      contactEmail,
+      mobileNumber,
+      password,
+      referralCode, // optional
     } = req.body;
 
-    // Trim all inputs
-    employerType = employerType?.trim();
-    schoolName = schoolName?.trim();
-    userMobile = userMobile?.trim();
-    lastName = lastName?.trim();
-    firstName = firstName?.trim();
-    userEmail = userEmail?.trim();
-    userPassword = userPassword?.trim();
-    referralCode = referralCode.trim();
-
     // Validation
-    if (!userEmail && !userMobile) {
+    if (!contactEmail) {
       return res.status(400).json({ message: "Email or mobile is required." });
     }
 
     // Check if user already exists
-    const existUser = await userModel.findOne({
-      $or: [{ userMobile }, { userEmail }],
-    });
+    const existUser = await userModel.findOne({ userEmail: contactEmail });
 
     if (existUser) {
       return res.status(400).json({ message: "Employer already registered." });
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(userPassword, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Handle referral code if provided
     let referredBy = null;
@@ -202,113 +188,101 @@ const signUp = async (req, res) => {
     // Create new employer
     const newEmployer = new userModel({
       uuid: uuidv4(),
-      employerType,
-      schoolName,
-      userMobile,
-      lastName,
-      firstName,
-      userEmail,
-      verificationstatus: "pending",
-      blockstatus: "unblock",
-      userPassword: hashedPassword,
-      emailverifedstatus: true,
-      referredBy,
+      companyName,
+      contactPerson,
+      contactEmail: contactEmail,
+      password: hashedPassword,
     });
 
     // Generate unique referral code
     newEmployer.referralCode = newEmployer.generateReferralCode();
 
-    // Save the new employer
+    // Save employer
     await newEmployer.save();
 
     // Update referrer's counts if applicable
     if (referredBy) {
       await userModel.findByIdAndUpdate(referredBy, {
-        $inc: {
-          referralCount: 1,
-          referralRewards: 100, // You can adjust this value
-        },
+        $inc: { referralCount: 1, referralRewards: 100 },
       });
     }
 
-    // ✅ Send email with login details
-    const loginLink = "https://gregarious-empanada-38a625.netlify.app/employer/login";
-    const logoUrl = "../../assets/logo (1).png"; // put your actual EdProfio logo URL here
+    // ✅ Email template
+    const loginLink = "https:jobsstorm.com/employer-login"; // replace with actual
+    const emailHtml = `
+  <div style="font-family: Arial, sans-serif; padding:30px; max-width:600px; margin:auto; border-radius:10px; background-color:#1a1a1a; color:#f0f0f0;">
+    <div style="text-align:center; padding-bottom:20px; border-bottom:1px solid #333;">
+      <img src="cid:jobsstormlogo" alt="JobsStorm Logo" style="max-height:80px; margin-bottom:15px;" />
+      <h2 style="color:#ffffff; font-weight:bold;">Welcome to JobsStorm - Global Career Partner!</h2>
+    </div>
 
-    let extraNote = "";
-    if (userPassword === "defaultPassword123") {
-      extraNote = `<p style="color:#d9534f;font-weight:bold;">⚠️ Please change your password after logging in for security reasons.</p>`;
+    <p style="font-size:16px;">Hi <b>${contactPerson}</b>,</p>
+    <p style="font-size:16px;">Your employer account has been successfully created.</p>
+
+    <p style="font-size:16px; font-weight:bold;">Login Credentials:</p>
+    <ul style="list-style-type:none; padding-left:0; font-size:16px;">
+      <li>Email: <b>${contactEmail}</b></li>
+      <li>Password: <b>${password}</b></li>
+    </ul>
+
+    ${
+      password === "defaultPassword123"
+        ? `<p style="color:#ff4c4c; font-weight:bold; font-size:14px;">⚠️ Please change your password after logging in for security reasons.</p>`
+        : ""
     }
 
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; padding:20px; max-width:600px; margin:auto; border:1px solid #eee; border-radius:10px;">
-        <div style="text-align:center;">
-          <img src="${logoUrl}" alt="EdProfio Logo" style="max-height:80px; margin-bottom:20px;" />
-          <h2 style="color:#333;">Welcome to EdProfio!</h2>
-        </div>
-        <p>Hi <b> ${lastName}</b>,</p>
-        <p>Your employer account has been successfully created.</p>
+    <div style="text-align:center; margin:30px 0;">
+      <a href="${loginLink}" 
+         style="background:#ff6600; color:#ffffff; padding:14px 30px; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block; font-size:16px;">
+        Login to Your Account
+      </a>
+    </div>
 
-        <p><b>Login Credentials:</b></p>
-        <ul>
-          <li>Email: <b>${userEmail}</b></li>
-          <li>Password: <b>${userPassword}</b></li>
-        </ul>
+    <p style="font-size:14px; color:#cccccc;">If you have any questions, feel free to reach out to our support team.</p>
+    <p style="font-size:14px; margin-top:30px; color:#cccccc;">
+      Best regards,<br/>
+      The <b>JobsStorm - Global Career Partner</b> Team
+    </p>
+  </div>
+`;
 
-        ${extraNote}
-
-        <div style="text-align:center; margin:30px 0;">
-          <a href="${loginLink}" style="background:#007bff; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">Login to Your Account</a>
-        </div>
-
-        <p>If you have any questions, feel free to reach out to our support team.</p>
-        <p style="margin-top:30px;">Best regards,<br/>The <b>EdProfio</b> Team</p>
-      </div>
-    `;
-
+    // Send email
     await sendEmail(
-      userEmail,
-      "Welcome to EdProfio - Your Employer Account Details",
-      "", // plain text fallback
-      emailHtml // pass HTML
+      contactEmail,
+      "Welcome to JobsStorm - Your Employer Account Details",
+      emailHtml
     );
 
-    // Create JWT token
+    // JWT token
     const token = jwt.sign({ id: newEmployer._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
 
-    // Return success response
+    // Response
     res.status(201).json({
       success: true,
       message: "Employer registered successfully",
       data: {
         id: newEmployer._id,
         uuid: newEmployer.uuid,
-        firstName: newEmployer.firstName,
-        lastName: newEmployer.lastName,
+        companyName: newEmployer.companyName,
+        contactPerson: newEmployer.contactPerson,
         userEmail: newEmployer.userEmail,
         userMobile: newEmployer.userMobile,
         referralCode: newEmployer.referralCode,
-        verificationstatus: newEmployer.verificationstatus,
-        blockstatus: newEmployer.blockstatus,
-        emailverifedstatus: newEmployer.emailverifedstatus,
-        referredBy: referredBy,
+        referredBy,
       },
       token,
     });
   } catch (err) {
-    console.error("Error in employer registration:", err.message);
-    console.error(err.stack);
-
+    console.error("Error in employer registration:", err);
     if (err.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Registration failed due to duplicate data",
+        message: "Duplicate data found",
         error: err.message,
       });
     }
-
     res.status(500).json({
       success: false,
       message: "Server error during registration",
@@ -319,17 +293,14 @@ const signUp = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { userMobile, userEmail, userPassword } = req.body;
+    const { userEmail, password } = req.body;
 
-    if (!userMobile && !userEmail) {
-      return res.status(400).json({ message: "Mobile or email is required." });
+    if (!userEmail) {
+      return res.status(400).json({ message: "Email is required." });
     }
 
     const user = await userModel.findOne({
-      $or: [
-        { userMobile: userMobile ? parseInt(userMobile) : null },
-        { userEmail: userEmail || "" },
-      ],
+      contactEmail: userEmail,
     });
 
     if (!user) {
@@ -338,7 +309,7 @@ const login = async (req, res) => {
         .json({ message: "Please check your email and password." });
     }
 
-    const match = await bcrypt.compare(userPassword, user.userPassword);
+    const match = await bcrypt.compare(password, user?.password);
     if (!match) {
       return res
         .status(400)
@@ -526,12 +497,10 @@ const updateProfilePicture = async (req, res) => {
     // Get file URL
     const fileUrl = result.secure_url || result.url || result.path;
     if (!fileUrl) {
-      return res
-        .status(500)
-        .json({
-          message: "Cloudinary upload failed: No URL returned",
-          details: result,
-        });
+      return res.status(500).json({
+        message: "Cloudinary upload failed: No URL returned",
+        details: result,
+      });
     }
 
     // Find current employee
@@ -682,7 +651,7 @@ const employerChangeMyPassword = async (req, res) => {
   try {
     const { employerId } = req.params;
     const { currentPassword, newPassword } = req.body;
-    console.log("req.body",req.body)
+    console.log("req.body", req.body);
 
     // Validate inputs
     if (!currentPassword || !newPassword) {
@@ -791,8 +760,6 @@ const getReferralLink = async (req, res) => {
 //   }
 // };
 
-
-
 const sendOtpToEmail = async (req, res) => {
   const { userEmail } = req.body;
 
@@ -869,7 +836,6 @@ const sendOtpToEmail = async (req, res) => {
     return res.status(500).json({ message: "Error sending OTP", error });
   }
 };
-
 
 const verifyEmailOtp = async (req, res) => {
   const { userEmail, otp } = req.body;
@@ -1028,12 +994,10 @@ const decreaseProfileView = async (req, res) => {
   }
 };
 
-
-
 const getJobAndEmployerCount = async (req, res) => {
   try {
-    const employerCount = await userModel.countDocuments();  
-    const jobCount = await jobModel.countDocuments();       
+    const employerCount = await userModel.countDocuments();
+    const jobCount = await jobModel.countDocuments();
 
     return res.status(200).json({
       success: true,
@@ -1049,14 +1013,6 @@ const getJobAndEmployerCount = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
 
 module.exports = {
   getJobAndEmployerCount,

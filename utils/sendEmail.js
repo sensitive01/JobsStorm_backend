@@ -1,30 +1,8 @@
-// const nodemailer = require('nodemailer');
-// require('dotenv').config();
-// const sendEmail = async (to, subject, text) => {
-//   const transporter = nodemailer.createTransport({
-//     service: 'gmail', // or use your SMTP config
-//     auth: {
-//            user: process.env.EMAIL_USER,
-//       pass: process.env.EMAIL_PASS
-//     }
-//   });
-
-//   const mailOptions = {
-//     from: process.env.EMAIL_USER,
-//     to,
-//     subject,
-//     text
-//   };
-
-//   await transporter.sendMail(mailOptions);
-// };
-
-// module.exports = sendEmail;
-
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+const path = require("path");
 
-const sendEmail = async (to, subject, text, html = null) => {
+const sendEmail = async (to, subject, html) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -32,19 +10,26 @@ const sendEmail = async (to, subject, text, html = null) => {
       pass: process.env.EMAIL_PASS,
     },
     tls: {
-      rejectUnauthorized: false, // fix occasional self-signed cert errors
+      rejectUnauthorized: false,
     },
   });
 
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: `"JobsStorm – Global Career Partner" <${process.env.EMAIL_USER}>`,
     to,
     subject,
-    text,
-    html, 
+    html,
+    attachments: [
+      {
+        filename: "jobsstorm-logo.png",
+        path: path.join(__dirname, "../assets/logo-light.png"), 
+        cid: "jobsstormlogo", // ✅ Use CID for embedding inline
+      },
+    ],
   };
 
   await transporter.sendMail(mailOptions);
+  console.log(`Email sent to ${to}`);
 };
 
 module.exports = sendEmail;
