@@ -84,6 +84,8 @@ employerRoute.post('/login', employerController.login);
 employerRoute.post('/sendemailotp', emailverifycontroller.sendOtpToEmail);
 employerRoute.post('/verifyemailotp', emailverifycontroller.verifyEmailOtp);
 
+employerRoute.post('/send-verification-otp', emailverifycontroller.sendVerificationEmail);
+
 
 
 

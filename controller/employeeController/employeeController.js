@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 const Job = require("../../models/jobSchema");
 const userModel = require("../../models/employeeschema");
 const Employee = require("../../models/employeeschema");
+const demoModel = require("../../models/bookDemoModal")
 
 const generateOTP = require("../../utils/generateOTP");
 const jwtDecode = require("jwt-decode");
@@ -1328,8 +1329,44 @@ const getMyName = async (req, res) => {
 
 
 
+const bookDemoSchedule = async (req, res) => {
+  try {
+    const { formData } = req.body;
 
+    // Validate that formData exists
+    if (!formData) {
+      return res.status(400).json({
+        success: false,
+        message: "Form data is required",
+      });
+    }
 
+    // Create a new document
+    const saveData = new demoModel({
+      schoolName: formData.schoolName,
+      location: formData.location,
+      contactPerson: formData.contactPerson,
+      contactNumber: formData.contactNumber,
+      email: formData.email,
+    });
+
+    // Save to database
+    await saveData.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Demo booked successfully",
+      data: saveData,
+    });
+  } catch (err) {
+    console.error("Error saving demo:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while saving demo",
+      error: err.message,
+    });
+  }
+};
 
 
 
@@ -1341,6 +1378,7 @@ const getMyName = async (req, res) => {
 
 //hbh
 module.exports = {
+  bookDemoSchedule,
   getMyName,
   addwithouttoeken,
   addJobAlert,

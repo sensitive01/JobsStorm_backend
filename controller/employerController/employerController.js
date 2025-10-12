@@ -210,40 +210,27 @@ const signUp = async (req, res) => {
     // ✅ Email template
     const loginLink = "https:jobsstorm.com/employer-login"; // replace with actual
     const emailHtml = `
-  <div style="font-family: Arial, sans-serif; padding:30px; max-width:600px; margin:auto; border-radius:10px; background-color:#1a1a1a; color:#f0f0f0;">
-    <div style="text-align:center; padding-bottom:20px; border-bottom:1px solid #333;">
-      <img src="cid:jobsstormlogo" alt="JobsStorm Logo" style="max-height:80px; margin-bottom:15px;" />
-      <h2 style="color:#ffffff; font-weight:bold;">Welcome to JobsStorm - Global Career Partner!</h2>
-    </div>
-
-    <p style="font-size:16px;">Hi <b>${contactPerson}</b>,</p>
-    <p style="font-size:16px;">Your employer account has been successfully created.</p>
-
-    <p style="font-size:16px; font-weight:bold;">Login Credentials:</p>
-    <ul style="list-style-type:none; padding-left:0; font-size:16px;">
-      <li>Email: <b>${contactEmail}</b></li>
-      <li>Password: <b>${password}</b></li>
-    </ul>
-
-    ${
-      password === "defaultPassword123"
-        ? `<p style="color:#ff4c4c; font-weight:bold; font-size:14px;">⚠️ Please change your password after logging in for security reasons.</p>`
-        : ""
-    }
-
-    <div style="text-align:center; margin:30px 0;">
-      <a href="${loginLink}" 
-         style="background:#ff6600; color:#ffffff; padding:14px 30px; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block; font-size:16px;">
-        Login to Your Account
-      </a>
-    </div>
-
-    <p style="font-size:14px; color:#cccccc;">If you have any questions, feel free to reach out to our support team.</p>
-    <p style="font-size:14px; margin-top:30px; color:#cccccc;">
-      Best regards,<br/>
-      The <b>JobsStorm - Global Career Partner</b> Team
-    </p>
+<div style="font-family: Arial, sans-serif; padding:30px; max-width:600px; margin:auto; border-radius:10px; background-color:#1a1a1a; color:#f0f0f0;">
+  <div style="text-align:center; padding-bottom:20px; border-bottom:1px solid #333;">
+    <img src="cid:jobsstormlogo" alt="JobsStorm Logo" style="max-height:80px; margin-bottom:15px;" />
+    <h2 style="color:#ffffff; font-weight:bold;">Welcome to JobsStorm - Global Career Partner!</h2>
   </div>
+
+  <p style="font-size:16px;">Hi <b>${contactPerson}</b>,</p>
+  <p style="font-size:16px;">We are thrilled to have you on board. Your employer account has been successfully created. 🎉</p>
+  <p style="font-size:16px;">You can now start posting jobs and managing your company profile.</p>
+
+  <p style="font-size:14px; color:#cccccc;">If you have any questions, feel free to reach out to our support team.</p>
+
+  <p style="font-size:14px; margin-top:30px; color:#cccccc;">
+    Best regards,<br/>
+    The <b>JobsStorm - Global Career Partner</b> Team
+  </p>
+
+  <div style="text-align:center; margin-top:20px; font-size:12px; color:#888888;">
+    Developed by <a href="https://sensitive.co.in" style="color:#ff6600; text-decoration:none;">Sensitive Technologies</a>
+  </div>
+</div>
 `;
 
     // Send email
