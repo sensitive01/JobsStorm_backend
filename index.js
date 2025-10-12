@@ -22,7 +22,7 @@ initializeAdmin();
 app.use(cookieParser());
 app.use(express.json());
 
-const allowedOrigins = ["http://localhost:5174","http://localhost:5173","https://job-storm-frontend.vercel.app","https://job-strom-employer.vercel.app","https://job-strom-employer.vercel.app","https://jobsstorm-admin-panel.vercel.app"];
+const allowedOrigins = ["http://localhost:5174","http://localhost:5173","https://job-storm-frontend.vercel.app","https://job-strom-employer.vercel.app","https://job-strom-employer.vercel.app","https://jobsstorm-admin-panel.vercel.app","https://jobsstorm.com"];
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
