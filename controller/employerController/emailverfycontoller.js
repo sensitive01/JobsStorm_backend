@@ -264,11 +264,11 @@ const verifyEmailOtp = async (req, res) => {
     }
 
     // Mark verified in DB
-    await userModel.updateOne(
-      { userEmail },
-      { $set: { emailverifedstatus: true } },
-      { upsert: true }
-    );
+    // await userModel.updateOne(
+    //   { userEmail },
+    //   { $set: { emailverifedstatus: true } },
+    //   { upsert: true }
+    // );
 
     // Remove OTP from memory
     delete req.app.locals.otps[userEmail];
