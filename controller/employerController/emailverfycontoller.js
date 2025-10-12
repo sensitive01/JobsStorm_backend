@@ -200,12 +200,12 @@ const sendOtpToEmail = async (req, res) => {
 
     // Simple cooldown: prevent multiple OTPs within 1 minute
     const existingOtp = req.app.locals.otps[userEmail];
-    if (existingOtp && Date.now() - existingOtp.createdAt < 60 * 1000) {
-      return res.status(429).json({
-        message:
-          "OTP already sent recently. Please wait a minute before retrying.",
-      });
-    }
+    // if (existingOtp && Date.now() - existingOtp.createdAt < 60 * 1000) {
+    //   return res.status(429).json({
+    //     message:
+    //       "OTP already sent recently. Please wait a minute before retrying.",
+    //   });
+    // }
 
     // Generate and hash OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -301,12 +301,12 @@ const sendVerificationEmail = async (req, res) => {
 
     // Simple cooldown: prevent multiple OTPs within 1 minute
     const existingOtp = req.app.locals.otps[normalizedEmail];
-    if (existingOtp && Date.now() - existingOtp.createdAt < 60 * 1000) {
-      return res.status(429).json({
-        message:
-          "OTP already sent recently. Please wait a minute before retrying.",
-      });
-    }
+    // if (existingOtp && Date.now() - existingOtp.createdAt < 60 * 1000) {
+    //   return res.status(429).json({
+    //     message:
+    //       "OTP already sent recently. Please wait a minute before retrying.",
+    //   });
+    // }
 
     // Generate and hash OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
