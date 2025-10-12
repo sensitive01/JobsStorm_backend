@@ -306,10 +306,12 @@ const login = async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
+    const role = user?.role||"employer"
     res.json({
       message: "Login successful",
       user,
       token,
+      
     });
   } catch (err) {
     console.error("Login error:", err);

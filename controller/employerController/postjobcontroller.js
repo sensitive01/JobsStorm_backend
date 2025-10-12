@@ -24,8 +24,8 @@ const getJobTitleByJobId = async (req, res) => {
 const updateJobById = async (req, res) => {
   try {
     const { id } = req.params; // _id from URL
-    const {updatedData} = req.body; // New data to overwrite existing
-    console.log("updatedData",updatedData)
+    const { updatedData } = req.body; // New data to overwrite existing
+    console.log("updatedData", updatedData);
 
     const updatedJob = await Job.findByIdAndUpdate(
       id,
@@ -43,11 +43,6 @@ const updateJobById = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
-
-
-
-
-
 
 const changeJobStatus = async (req, res) => {
   try {
@@ -73,11 +68,6 @@ const changeJobStatus = async (req, res) => {
   }
 };
 
-
-
-
-
-
 const generateJobId = async () => {
   let unique = false;
   let jobId;
@@ -100,7 +90,7 @@ const generateJobId = async () => {
 const createJob = async (req, res) => {
   try {
     const { jobData } = req.body;
-    console.log("jobData",jobData)
+    console.log("jobData", jobData);
     const { empId } = req.params;
 
     const employer = await Employer.findById(empId);
@@ -131,7 +121,7 @@ const createJob = async (req, res) => {
     employer.totaljobpostinglimit -= 1;
     await employer.save();
 
-    res.status(201).json(savedJob);
+    res.status(201).json({ message: "Job Posted Successfully", savedJob });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

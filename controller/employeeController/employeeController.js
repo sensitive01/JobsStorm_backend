@@ -4,7 +4,8 @@ const bcrypt = require("bcrypt");
 const Job = require("../../models/jobSchema");
 const userModel = require("../../models/employeeschema");
 const Employee = require("../../models/employeeschema");
-const demoModel = require("../../models/bookDemoModal")
+const demoModel = require("../../models/bookDemoModal");
+const Employer = require("../../models/employerSchema");
 
 const generateOTP = require("../../utils/generateOTP");
 const jwtDecode = require("jwt-decode");
@@ -29,8 +30,14 @@ const JobFilter = require("../../models/jobAlertModal");
 const signUp = async (req, res) => {
   try {
     console.log("req.body", req.body);
-    const { userName, userMobile, userEmail, userPassword, referralCode ,countryCode} =
-      req.body;
+    const {
+      userName,
+      userMobile,
+      userEmail,
+      userPassword,
+      referralCode,
+      countryCode,
+    } = req.body;
 
     // Clean and keep mobile as string
     const mobile = userMobile.replace(/[^0-9]/g, "");
@@ -55,7 +62,7 @@ const signUp = async (req, res) => {
       verificationstatus: "pending",
       blockstatus: "unblock",
       emailverifedstatus: true,
-      countryCode
+      countryCode,
     });
 
     // Generate and assign referral code
@@ -1297,16 +1304,15 @@ const updateAvailabilityStatus = async (req, res) => {
   }
 };
 
-
 const getMyName = async (req, res) => {
   try {
     const { userId } = req.params; // or from req.body / req.user depending on your setup
 
     // Fetch the user by ID, only return userName field
-    const user = await userModel.findOne(
-      { _id: userId },
-      { userName: 1, _id: 0 }
-    );
+    const user =
+      (await userModel.findOne({ _id: userId }, { userName: 1, _id: 0 })) ||
+      (await Employer.findOne({ _id: userId }, { contactPerson: 1, _id: 0 }));
+
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -1314,7 +1320,7 @@ const getMyName = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      userName: user.userName,
+      userName: user?.userName||user?.contactPerson,
     });
   } catch (err) {
     console.error("Error fetching user name:", err);
@@ -1325,9 +1331,6 @@ const getMyName = async (req, res) => {
     });
   }
 };
-
-
-
 
 const bookDemoSchedule = async (req, res) => {
   try {
@@ -1367,14 +1370,6 @@ const bookDemoSchedule = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
 
 //hbh
 module.exports = {
