@@ -1,48 +1,125 @@
 const express = require("express");
-const router = express.Router();
-const planController = require('../../controller/employerController/employerplanController');
-const adminfunction = require('../../controller/adminController/adminfunction');
-const banercontroller = require('../../controller/adminController/eventbannerController');
-const employeebanner = require('../../controller/adminController/employeebanner');
-const { bannerImageStorage } = require("../../config/cloudinary"); 
 const multer = require("multer");
+const { bannerImageStorage } = require("../../config/cloudinary");
 
-// Use the Cloudinary storage instead of memoryStorage
-const upload = multer({ storage: bannerImageStorage });
-const adminlogincontroller = require('../../controller/adminController/adminlogin');
+// Controllers
+const planController = require("../../controller/employerController/employerplanController");
+const adminfunction = require("../../controller/adminController/adminfunction");
+const bannerController = require("../../controller/adminController/eventbannerController");
+const employeeBannerController = require("../../controller/adminController/employeebanner");
+const adminLoginController = require("../../controller/adminController/adminlogin");
+
+// Initialize Router
 const mainadminRoute = express.Router();
 
-mainadminRoute.get('/fetchplanbyemp/:employerId', planController.getPlansByEmployer);
-mainadminRoute.post('/activateplans', planController.activateSubscription);
-mainadminRoute.get('/getallplans', planController.getAllPlans);
-mainadminRoute.get('/getplans:id', planController.getPlanById);
-mainadminRoute.post('/createplan',  planController.createPlan);
-mainadminRoute.put('/updateplan:id',  planController.updatePlan);
-mainadminRoute.delete('/deleteplan:id', planController.deletePlan);
-mainadminRoute.put('/approveemployer/:id',  adminfunction.approveSingleEmployer);
-mainadminRoute.put('/approve-all',  adminfunction.approveAllEmployers);
-mainadminRoute.put('/approveemployee/:id',  adminfunction.approveSingleEmployee);
-mainadminRoute.put('/approveallemployee',  adminfunction.approveAllEmployee);
-mainadminRoute.put('/approveemployeradmin/:id',  adminfunction.approveSingleEmployeradmin);
-mainadminRoute.put('/approveallemployeradmin',  adminfunction.approveAllEmployeradmin);
-mainadminRoute.put('/updateapprovejobs/:id',  adminfunction.updateJobStatus);
-mainadminRoute.put('/updateallapprved',  adminfunction.updateapproved);
-mainadminRoute.put('/updateblockstatus/:id',  adminfunction.blockunblockemployer);
-mainadminRoute.put('/updateblockstatusemploye/:id',  adminfunction.blockunblockemployee);
-mainadminRoute.put('/updateblockstatusemployeradmin/:id',  adminfunction.blockunblockemployeradmin);
-mainadminRoute.put('/updateunlick',  adminfunction.updateallblock);
-mainadminRoute.get('/getallemployers', adminfunction.getAllEmployers);
+// Multer setup for Cloudinary image uploads
+const upload = multer({ storage: bannerImageStorage });
 
-mainadminRoute.get('/getsubscribedemployers', adminfunction.getSubscribedEmployers);
-mainadminRoute.post("/createeventbanner", upload.fields([{ name: 'image', maxCount: 1 }]), banercontroller.createBanner);
-mainadminRoute.get('/fetchalleventbanner', banercontroller.getBanners);
+/* ────────────────────────────────────────────────
+   📦 PLAN MANAGEMENT
+──────────────────────────────────────────────── */
+mainadminRoute.get(
+  "/fetchplanbyemp/:employerId",
+  planController.getPlansByEmployer
+);
+mainadminRoute.post("/activateplans", planController.activateSubscription);
+mainadminRoute.get("/getallplans", planController.getAllPlans);
+mainadminRoute.get("/getplan/:id", planController.getPlanById);
+mainadminRoute.post("/createplan", planController.createPlan);
+mainadminRoute.put("/updateplan/:id", planController.updatePlan);
+mainadminRoute.delete("/deleteplan/:id", planController.deletePlan);
 
-mainadminRoute.post('/signup', adminlogincontroller.adminSignup);
-mainadminRoute.get('/fetchallemployeradmin', adminlogincontroller.getAllEmployerAdmins);
-// Login route
-mainadminRoute.post('/adminlogin', adminlogincontroller.adminLogin);
-mainadminRoute.post("/createemployeebanner", upload.fields([{ name: 'image', maxCount: 1 }]), employeebanner.employeecreatebanner);
-mainadminRoute.get('/fetchemployeebanner', employeebanner.getemployeeBanners);
+/* ────────────────────────────────────────────────
+   🧾 EMPLOYER & EMPLOYEE APPROVALS
+──────────────────────────────────────────────── */
+mainadminRoute.put("/approveemployer/:id", adminfunction.approveSingleEmployer);
+mainadminRoute.put("/approve-all", adminfunction.approveAllEmployers);
 
-// employeradminRoute.get();
+mainadminRoute.put("/approveemployee/:id", adminfunction.approveSingleEmployee);
+mainadminRoute.put("/approveallemployee", adminfunction.approveAllEmployee);
+
+mainadminRoute.put(
+  "/approveemployeradmin/:id",
+  adminfunction.approveSingleEmployeradmin
+);
+mainadminRoute.put(
+  "/approveallemployeradmin",
+  adminfunction.approveAllEmployeradmin
+);
+
+mainadminRoute.put("/updateapprovejobs/:id", adminfunction.updateJobStatus);
+mainadminRoute.put("/updateallapproved", adminfunction.updateapproved);
+
+/* ────────────────────────────────────────────────
+   🚫 BLOCK / UNBLOCK MANAGEMENT
+──────────────────────────────────────────────── */
+mainadminRoute.put(
+  "/updateblockstatus/:id",
+  adminfunction.blockunblockemployer
+);
+mainadminRoute.put(
+  "/updateblockstatusemployee/:id",
+  adminfunction.blockunblockemployee
+);
+mainadminRoute.put(
+  "/updateblockstatusemployeradmin/:id",
+  adminfunction.blockunblockemployeradmin
+);
+mainadminRoute.put("/updateunblockall", adminfunction.updateallblock);
+
+/* ────────────────────────────────────────────────
+   🧑‍💼 EMPLOYER & EMPLOYEE FETCH
+──────────────────────────────────────────────── */
+mainadminRoute.get("/getallemployers", adminfunction.getAllEmployers);
+mainadminRoute.put("/approve-employer/:employerId", adminfunction.approveEmployer);
+mainadminRoute.put("/reject-employer/:employerId", adminfunction.rejectEmployer);
+mainadminRoute.get("/get-employer-details/:employerId", adminfunction.getEmployerDetails);
+mainadminRoute.get("/get-registerd-candidate", adminfunction.getRegisteredCandidates);
+mainadminRoute.get("/get-candidate-details/:candidateId", adminfunction.getCandidateDetails);
+mainadminRoute.get("/get-all-company-details", adminfunction.getRegisteredCompanyData);
+mainadminRoute.get("/get-all-company-posted-jobs/:companyId", adminfunction.getAllJobsPostedByCompany);
+mainadminRoute.get("/get-job-details/:jobId", adminfunction.getJobDetails);
+mainadminRoute.put("/update-job-details/:jobId", adminfunction.updateJobDetails);
+
+
+
+
+mainadminRoute.get(
+  "/getsubscribedemployers",
+  adminfunction.getSubscribedEmployers
+);
+
+/* ────────────────────────────────────────────────
+   🖼️ EVENT & EMPLOYEE BANNERS
+──────────────────────────────────────────────── */
+mainadminRoute.post(
+  "/createeventbanner",
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  bannerController.createBanner
+);
+mainadminRoute.get("/fetchalleventbanner", bannerController.getBanners);
+
+mainadminRoute.post(
+  "/createemployeebanner",
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  employeeBannerController.employeecreatebanner
+);
+mainadminRoute.get(
+  "/fetchemployeebanner",
+  employeeBannerController.getemployeeBanners
+);
+
+/* ────────────────────────────────────────────────
+   🔐 ADMIN AUTH
+──────────────────────────────────────────────── */
+mainadminRoute.post("/signup", adminLoginController.adminSignup);
+mainadminRoute.post("/login", adminLoginController.adminVerification);
+mainadminRoute.get(
+  "/fetchallemployeradmin",
+  adminLoginController.getAllEmployerAdmins
+);
+
+/* ────────────────────────────────────────────────
+   ✅ EXPORT ROUTER
+──────────────────────────────────────────────── */
 module.exports = mainadminRoute;

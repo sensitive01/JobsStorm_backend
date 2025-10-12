@@ -11,15 +11,18 @@ const Employer = require("./models/employerSchema.js");
 const app = express();
 const { PORT } = require("./config/variables.js");
 const cron = require('node-cron');
+const { initializeAdmin } = require("./controller/adminController/adminlogin.js");
 app.set("trust proxy", true);
 
 // DATABASE CONNECTION
 dbConnect();
+initializeAdmin();
+
 
 app.use(cookieParser());
 app.use(express.json());
 
-const allowedOrigins = ["http://localhost:5174"," http://localhost:5173","https://job-storm-frontend.vercel.app","https://job-strom-employer.vercel.app","https://job-strom-employer.vercel.app"];
+const allowedOrigins = ["http://localhost:5174","http://localhost:5173","https://job-storm-frontend.vercel.app","https://job-strom-employer.vercel.app","https://job-strom-employer.vercel.app","https://jobsstorm-admin-panel.vercel.app"];
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {

@@ -1,12 +1,12 @@
 // controllers/employerController.js
 const express = require("express");
 const router = express.Router();
-const employerController = require('../../controller/adminController/adminfunction');   
-const Employer = require('../../models/employerSchema');
-const Employee = require('../../models/employeeschema');
-const Employeradmin = require('../../models/employeradminSchema');
+const employerController = require("../../controller/adminController/adminfunction");
+const Employer = require("../../models/employerSchema");
+const Employee = require("../../models/employeeschema");
+const Employeradmin = require("../../models/employeradminSchema");
 
-const Job = require('../../models/jobSchema');
+const Job = require("../../models/jobSchema");
 // Approve a single employer
 exports.approveSingleEmployer = async (req, res) => {
   try {
@@ -14,7 +14,9 @@ exports.approveSingleEmployer = async (req, res) => {
     const { verificationstatus } = req.body; // Accept from client
 
     if (!verificationstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employer = await Employer.findByIdAndUpdate(
@@ -24,16 +26,16 @@ exports.approveSingleEmployer = async (req, res) => {
     );
 
     if (!employer) {
-      return res.status(404).json({ message: 'Employer not found' });
+      return res.status(404).json({ message: "Employer not found" });
     }
 
     res.json({
       message: `Employer verification status updated to ${verificationstatus}`,
-      employer
+      employer,
     });
   } catch (error) {
-    console.error('Error updating employer verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employer verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -42,15 +44,15 @@ exports.approveAllEmployers = async (req, res) => {
   try {
     const result = await Employer.updateMany(
       {},
-      { verificationstatus: 'approved' }
+      { verificationstatus: "approved" }
     );
 
     res.json({
-      message: `Verification status updated to approved for ${result.modifiedCount} employers`
+      message: `Verification status updated to approved for ${result.modifiedCount} employers`,
     });
   } catch (error) {
-    console.error('Error approving all employers:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error approving all employers:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.approveSingleEmployee = async (req, res) => {
@@ -59,7 +61,9 @@ exports.approveSingleEmployee = async (req, res) => {
     const { verificationstatus } = req.body; // Accept from request body
 
     if (!verificationstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employee = await Employee.findByIdAndUpdate(
@@ -69,16 +73,16 @@ exports.approveSingleEmployee = async (req, res) => {
     );
 
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     res.json({
       message: `Employee verification status updated to ${verificationstatus}`,
-      employee
+      employee,
     });
   } catch (error) {
-    console.error('Error updating employee verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employee verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -87,15 +91,15 @@ exports.approveAllEmployee = async (req, res) => {
   try {
     const result = await Employee.updateMany(
       {},
-      { verificationstatus: 'approved' }
+      { verificationstatus: "approved" }
     );
 
     res.json({
-      message: `Verification status updated to approved for ${result.modifiedCount} employee`
+      message: `Verification status updated to approved for ${result.modifiedCount} employee`,
     });
   } catch (error) {
-    console.error('Error approving all employee:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error approving all employee:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -105,7 +109,9 @@ exports.approveSingleEmployeradmin = async (req, res) => {
     const { verificationstatus } = req.body; // Get status from request body
 
     if (!verificationstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employerAdmin = await Employeradmin.findByIdAndUpdate(
@@ -115,16 +121,16 @@ exports.approveSingleEmployeradmin = async (req, res) => {
     );
 
     if (!employerAdmin) {
-      return res.status(404).json({ message: 'Employer admin not found' });
+      return res.status(404).json({ message: "Employer admin not found" });
     }
 
     res.json({
       message: `Employer admin verification status updated to ${verificationstatus}`,
-      employerAdmin
+      employerAdmin,
     });
   } catch (error) {
-    console.error('Error updating employer admin verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employer admin verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -133,15 +139,15 @@ exports.approveAllEmployeradmin = async (req, res) => {
   try {
     const result = await Employeradmin.updateMany(
       {},
-      { verificationstatus: 'approved' }
+      { verificationstatus: "approved" }
     );
 
     res.json({
-      message: `Verification status updated to approved for ${result.modifiedCount} employee`
+      message: `Verification status updated to approved for ${result.modifiedCount} employee`,
     });
   } catch (error) {
-    console.error('Error approving all employee:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error approving all employee:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.updateapproved = async (req, res) => {
@@ -155,22 +161,22 @@ exports.updateapproved = async (req, res) => {
     console.log("Update Result:", result);
 
     // Fetch all approved jobs after update
-    const approvedJobs = await Job.find({ postingstatus: "approved" })
-      .sort({ createdAt: -1 });
+    const approvedJobs = await Job.find({ postingstatus: "approved" }).sort({
+      createdAt: -1,
+    });
 
     console.log("Approved Jobs:", approvedJobs);
 
     res.status(200).json({
       message: "All jobs updated to approved successfully",
       updatedCount: result.modifiedCount,
-      approvedJobs
+      approvedJobs,
     });
   } catch (error) {
     console.error("Error updating jobs to approved:", error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 exports.updateJobStatus = async (req, res) => {
   try {
@@ -182,7 +188,9 @@ exports.updateJobStatus = async (req, res) => {
     }
 
     if (!postingstatus) {
-      return res.status(400).json({ message: "Please provide a postingstatus value" });
+      return res
+        .status(400)
+        .json({ message: "Please provide a postingstatus value" });
     }
 
     // Update the job's postingstatus
@@ -200,7 +208,7 @@ exports.updateJobStatus = async (req, res) => {
 
     res.status(200).json({
       message: `Job updated to status: ${postingstatus} successfully`,
-      updatedJob
+      updatedJob,
     });
   } catch (error) {
     console.error("Error updating job status:", error);
@@ -214,7 +222,9 @@ exports.blockunblockemployer = async (req, res) => {
     const { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employer = await Employer.findByIdAndUpdate(
@@ -224,31 +234,31 @@ exports.blockunblockemployer = async (req, res) => {
     );
 
     if (!employer) {
-      return res.status(404).json({ message: 'Employer not found' });
+      return res.status(404).json({ message: "Employer not found" });
     }
 
     res.json({
       message: `Employer verification status updated to ${blockstatus}`,
-      employer
+      employer,
     });
   } catch (error) {
-    console.error('Error updating employer verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employer verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.updateallblock = async (req, res) => {
   try {
     const result = await Employeradmin.updateMany(
       {},
-      { blockstatus: 'unblock' }
+      { blockstatus: "unblock" }
     );
 
     res.json({
-      message: `Verification status updated to approved for ${result.modifiedCount} employers`
+      message: `Verification status updated to approved for ${result.modifiedCount} employers`,
     });
   } catch (error) {
-    console.error('Error approving all employers:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error approving all employers:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.blockunblockemployee = async (req, res) => {
@@ -257,7 +267,9 @@ exports.blockunblockemployee = async (req, res) => {
     const { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employer = await Employee.findByIdAndUpdate(
@@ -267,16 +279,16 @@ exports.blockunblockemployee = async (req, res) => {
     );
 
     if (!employer) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     res.json({
       message: `Employee verification status updated to ${blockstatus}`,
-      employer
+      employer,
     });
   } catch (error) {
-    console.error('Error updating employer verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employer verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.blockunblockemployeradmin = async (req, res) => {
@@ -285,7 +297,9 @@ exports.blockunblockemployeradmin = async (req, res) => {
     const { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res.status(400).json({ message: 'Verification status is required' });
+      return res
+        .status(400)
+        .json({ message: "Verification status is required" });
     }
 
     const employer = await Employeradmin.findByIdAndUpdate(
@@ -295,51 +309,370 @@ exports.blockunblockemployeradmin = async (req, res) => {
     );
 
     if (!employer) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     res.json({
       message: `Employee verification status updated to ${blockstatus}`,
-      employer
+      employer,
     });
   } catch (error) {
-    console.error('Error updating employer verification status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error updating employer verification status:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 exports.getAllEmployers = async (req, res) => {
   try {
-    const employers = await Employer.find().sort({ createdAt: -1 }); // latest first
+    const employers = await Employer.find(
+      {},
+      {
+        companyName: 1,
+        contactEmail: 1,
+        contactPerson: 1,
+        isVerified: 1,
+        verificationstatus: 1,
+        createdAt: 1,
+      }
+    ).sort({ createdAt: -1 }); // latest first
     res.status(200).json({
       success: true,
       count: employers.length,
-      data: employers
+      data: employers,
     });
   } catch (error) {
     console.error("Error fetching employers:", error);
     res.status(500).json({
       success: false,
       message: "Server Error",
-      error: error.message
+      error: error.message,
     });
   }
 };
+
+exports.approveEmployer = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Employer ID is required" });
+    }
+
+    const updatedEmployer = await Employer.findByIdAndUpdate(
+      employerId,
+      {
+        isVerified: true,
+        verificationstatus: "approved",
+      },
+      { new: true }
+    );
+
+    if (!updatedEmployer) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Employer not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Employer approved successfully",
+      data: updatedEmployer,
+    });
+  } catch (error) {
+    console.error("Error approving employer:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.rejectEmployer = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Employer ID is required" });
+    }
+
+    const updatedEmployer = await Employer.findByIdAndUpdate(
+      employerId,
+      {
+        isVerified: false,
+        verificationstatus: "rejected",
+      },
+      { new: true }
+    );
+
+    if (!updatedEmployer) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Employer not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Employer rejected successfully",
+      data: updatedEmployer,
+    });
+  } catch (error) {
+    console.error("Error rejecting employer:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
 exports.getSubscribedEmployers = async (req, res) => {
   try {
-    const subscribedEmployers = await Employer.find({ subscription: "true" })
-      .sort({ createdAt: -1 }); // latest first
+    const subscribedEmployers = await Employer.find({
+      subscription: "true",
+    }).sort({ createdAt: -1 }); // latest first
 
     res.status(200).json({
       success: true,
       count: subscribedEmployers.length,
-      data: subscribedEmployers
+      data: subscribedEmployers,
     });
   } catch (error) {
     console.error("Error fetching subscribed employers:", error);
     res.status(500).json({
       success: false,
       message: "Server Error",
-      error: error.message
+      error: error.message,
     });
+  }
+};
+
+exports.getEmployerDetails = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employer ID is required",
+      });
+    }
+
+    const employer = await Employer.findById(employerId, { password: 0 });
+
+    if (!employer) {
+      return res.status(404).json({
+        success: false,
+        message: "Employer not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: employer,
+    });
+  } catch (error) {
+    console.error("Error fetching employer details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getRegisteredCandidates = async (req, res) => {
+  try {
+    const candidates = await Employee.find(
+      {},
+      {
+        userName: 1,
+        userEmail: 1,
+        blockstatus: 1,
+        isVerified: 1,
+        verificationstatus: 1,
+        emailverifedstatus: 1,
+        createdAt: 1,
+      }
+    ).sort({ createdAt: -1 }); // latest first
+
+    res.status(200).json({
+      success: true,
+      count: candidates.length,
+      data: candidates,
+    });
+  } catch (error) {
+    console.error("Error fetching registered candidates:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getCandidateDetails = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    const candidates = await Employee.findOne(
+      { _id: candidateId },
+      { userPassword: 0 }
+    );
+
+    res.status(200).json({
+      success: true,
+
+      data: candidates,
+    });
+  } catch (error) {
+    console.error("Error fetching registered candidates:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getRegisteredCompanyData = async (req, res) => {
+  try {
+    const employers = await Employer.aggregate([
+      {
+        $project: {
+          companyName: 1,
+          contactEmail: 1,
+          contactPerson: 1,
+          isVerified: 1,
+          verificationstatus: 1,
+          createdAt: 1,
+          _idStr: { $toString: "$_id" }, // convert ObjectId to string
+        },
+      },
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "_idStr",
+          foreignField: "employId",
+          as: "jobsPosted",
+        },
+      },
+      {
+        $addFields: {
+          totalJobsPosted: { $size: "$jobsPosted" },
+        },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $project: { jobsPosted: 0, _idStr: 0 },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: employers.length,
+      data: employers,
+    });
+  } catch (error) {
+    console.error("Error fetching employers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getAllJobsPostedByCompany = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Company ID is required",
+      });
+    }
+
+    // Fetch jobs where employId matches companyId
+    const jobs = await Job.find(
+      { employId: companyId },
+      {
+        companyName: 1,
+        jobId: 1,
+        jobTitle: 1,
+        deadline: 1,
+        vacancy: 1,
+        createdAt: 1,
+      }
+    ).sort({ createdAt: -1 }); // latest first
+
+    res.status(200).json({
+      success: true,
+      count: jobs.length,
+      data: jobs,
+    });
+  } catch (error) {
+    console.error("Error fetching jobs for company:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getJobDetails = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    const job = await Job.findById(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: "Job not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: job,
+    });
+  } catch (error) {
+    console.error("Error fetching job details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+
+exports.updateJobDetails= async (req, res) => {
+  try {
+    const { jobId } = req.params; // _id from URL
+    const {updatedData} = req.body; // New data to overwrite existing
+    console.log("updatedData",updatedData)
+
+    const updatedJob = await Job.findByIdAndUpdate(
+      jobId,
+      { ...updatedData, updatedAt: Date.now() }, // overwrite all fields, and update timestamp
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedJob) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.status(200).json(updatedJob);
+  } catch (error) {
+    console.error("Error updating job:", error);
+    res.status(500).json({ message: "Server error", error });
   }
 };

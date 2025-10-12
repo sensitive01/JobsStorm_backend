@@ -1,6 +1,10 @@
 const Admin = require('../../models/adminloginschema');
 const bcrypt = require('bcrypt');
 const EmployerAdmin = require('../../models/employeradminSchema');
+const jwt = require("jsonwebtoken");
+
+
+
 exports.getAllEmployerAdmins = async (req, res) => {
   try {
     // Fetch all documents
@@ -94,5 +98,73 @@ exports.adminLogin = async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+exports.initializeAdmin = async () => {
+  try {
+    const existingAdmin = await Admin.findOne();
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+      const newAdmin = new Admin({
+        email: process.env.ADMIN_EMAIL,
+        password: hashedPassword,
+      });
+      await newAdmin.save();
+      console.log("✅ Default admin created:", newAdmin.email);
+    } else {
+      console.log("ℹ️ Admin already exists:", existingAdmin.email);
+    }
+  } catch (error) {
+    console.error("❌ Error initializing admin:", error);
+  }
+};
+
+// ✅ Admin Login
+exports.adminVerification = async (req, res) => {
+  try {
+    const { userEmail, userPassword } = req.body;
+
+    if (!userEmail || !userPassword) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password required." });
+    }
+
+    const admin = await Admin.findOne({ email: userEmail });
+    if (!admin) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Admin not found." });
+    }
+
+    const isPasswordMatch = await bcrypt.compare(userPassword, admin.password);
+    if (!isPasswordMatch) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid password." });
+    }
+
+    // ✅ Generate JWT
+    const token = jwt.sign(
+      { email: admin.email, role: "admin" },
+      process.env.JWT_SECRET || "secretkey",
+      { expiresIn: "2h" }
+    );
+
+    console.log("✅ Admin login successful");
+    return res.status(200).json({
+      success: true,
+      message: "Admin login successful.",
+      token,
+    });
+  } catch (err) {
+    console.error("❌ Error in admin verification:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during admin verification.",
+      error: err.message,
+    });
   }
 };

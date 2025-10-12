@@ -1,109 +1,144 @@
 const mongoose = require("mongoose");
 
+// 🔹 Education Subschema
 const educationSchema = new mongoose.Schema({
   type: { type: String, required: true }, // e.g., "Degree", "Diploma"
-  degree: { type: String, required: true }, // e.g., "Bachelor of Science"
+  degree: { type: String, required: true }, // e.g., "B.Sc", "B.Ed"
   institution: { type: String, required: true },
-  startDate: { type: String, required: true }, // MM/YYYY format
-  endDate: { type: String }, // MM/YYYY format (optional)
+  startDate: { type: String, required: true }, // MM/YYYY
+  endDate: { type: String }, // MM/YYYY (optional)
 });
 
+// 🔹 Work Experience Subschema
 const workExperienceSchema = new mongoose.Schema({
   position: { type: String, required: true },
   company: { type: String, required: true },
-  employmentType: { type: String, required: true }, // "Full-time", "Part-time", etc.
-  startDate: { type: String, required: true }, // MM/YYYY format
-  endDate: { type: String }, // MM/YYYY format (optional)
-  description: { type: String },
+  employmentType: { type: String, required: true }, // "Full-time", "Part-time"
+  startDate: { type: String, required: true }, // MM/YYYY
+  endDate: { type: String }, // MM/YYYY (optional)
+  description: String,
 });
+
+// 🔹 Media Subschema (Audio / Video / Image)
 const mediaSchema = new mongoose.Schema({
-  name: { type: String },
-  url: { type: String },
+  name: String,
+  url: String,
   type: { type: String, enum: ["audio", "video", "image"] },
-  duration: { type: Number }, // in seconds for audio/video
-  thumbnail: { type: String }, // for videos
+  duration: Number, // in seconds (for audio/video)
+  thumbnail: String, // video thumbnail
   createdAt: { type: Date, default: Date.now },
 });
 
-const employeeschema = new mongoose.Schema({
+// 🔹 Main Employee Schema
+const employeeSchema = new mongoose.Schema({
+  // 🧾 Identifiers
   uuid: String,
   googleId: String,
-  otp: { type: String },
-  otpExpires: { type: Date },
-  emailverifedstatus: { type: Boolean, default: true },
-
-  employeefcmtoken: { type: [String], default: [] },
   appleId: String,
+
+  // 🔐 Authentication & Verification
+  userPassword: String,
+  otp: String,
+  otpExpires: Date,
+  emailverifedstatus: { type: Boolean, default: true },
+  isVerified: { type: Boolean, default: false },
+  verificationstatus: { type: String, default: "pending" },
+  blockstatus: { type: String, default: "unblock" },
+
+  // 🔔 Notification Tokens
+  employeefcmtoken: { type: [String], default: [] },
+
+  // 👤 Personal Info
   userName: String,
+  gender: { type: String, enum: ["Male", "Female", "Others"] },
+  dob: String, // DD/MM/YYYY
+  maritalStatus: String,
+  languages: [String],
+
+  // 📍 Address & Location
+  addressLine1: String,
+  addressLine2: String,
+  city: String,
+  state: String,
+  pincode: String,
+  currentCity: String,
+  preferredLocation: String,
+  countryCode: String,
+
+  // 📞 Contact
   userEmail: String,
   userMobile: String,
-  audioFiles: [mediaSchema], // Array of audio files
-  videoFiles: [mediaSchema],
-  profileVideo: {
-    // Optional profile video
-    name: { type: String },
-    url: { type: String },
-    thumbnail: { type: String },
-    duration: { type: Number },
-  },
-  introductionAudio: {
-    // Optional audio introduction
-    name: { type: String },
-    url: { type: String },
-    duration: { type: Number },
-  }, // <-- Add this
-  userPassword: String, // <-- Add this
-  userProfilePic: String,
-  currentrole: { type: String }, // Default role is 'employee'
-  isVerified: { type: Boolean, default: false },
-  gender: { type: String, enum: ["Male", "Female", "Others"] },
-  dob: { type: String }, // DD/MM/YYYY format
-  addressLine1: { type: String },
-  addressLine2: { type: String },
-  city: { type: String },
-  state: { type: String },
-  pincode: { type: String },
-  preferredLocation: { type: String },
-  specialization: { type: String },
-  gradeLevels: { type: [String] }, // Array of grade levels
-  coverLetter: { type: String },
-  skills: { type: [String] }, // Array of skills
+
+  // 🏢 Professional Details
+  currentrole: String,
+  specialization: String,
+  gradeLevels: [String],
+  totalExperience: mongoose.Schema.Types.Mixed, // flexible format
+  expectedSalary: Number,
+  isAvailable: { type: Boolean, default: false },
+
+  // 🎓 Education & Work Experience
   education: [educationSchema],
   workExperience: [workExperienceSchema],
-  countryCode: { type: String },
+
+  // 🧠 Skills & Summary
+  skills: [String],
+  profilesummary: String,
+  coverLetter: String,
+
+  // 📁 Uploaded Files
   resume: {
-    name: { type: String },
-    url: { type: String },
+    name: String,
+    url: String,
   },
   coverLetterFile: {
-    name: { type: String },
-    url: { type: String },
+    name: String,
+    url: String,
   },
-  referralCode: { type: String, unique: true },
-  profilesummary: { type: String },
-  profileImage: { type: String }, // URL to profile image
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-  languages: [String],
-  maritalStatus: String,
-  isAvailable: { type: Boolean, default: false },
+
+  // 🖼️ Media (Audio / Video / Image)
+  audioFiles: [mediaSchema],
+  videoFiles: [mediaSchema],
+
+  // 🎥 Profile Media (Intro)
+  profileVideo: {
+    name: String,
+    url: String,
+    thumbnail: String,
+    duration: Number,
+  },
+  introductionAudio: {
+    name: String,
+    url: String,
+    duration: Number,
+  },
+
+  // 🌐 Online Presence
   github: String,
   linkedin: String,
   portfolio: String,
-  expectedSalary: Number,
-  currentCity: String,
-  totalExperience: mongoose.Schema.Types.Mixed,
-  referredBy: { type: mongoose.Schema.Types.ObjectId },
+
+  // 🏅 Referral System
+  referralCode: { type: String, unique: true },
+  referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employer" },
   referralCount: { type: Number, default: 0 },
   referralRewards: { type: Number, default: 0 },
-  verificationstatus: { type: String, default: "pending" },
-  blockstatus: { type: String, default: "unblock" },
+
+  // 📸 Profile
+  userProfilePic: String,
+  profileImage: String,
+
+  // 🕓 Metadata
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
-employeeschema.methods.generateReferralCode = function () {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+// 🔹 Referral Code Generator
+employeeSchema.methods.generateReferralCode = function () {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid ambiguous chars
   let result = "";
 
-  // Example using first letters of userName (since there's no schoolName in this schema)
+  // Use first 3 letters of userName if available
   if (this.userName) {
     result += this.userName.replace(/\s+/g, "").substring(0, 3).toUpperCase();
   } else {
@@ -112,6 +147,7 @@ employeeschema.methods.generateReferralCode = function () {
     }
   }
 
+  // Add 5 random chars
   for (let i = 0; i < 5; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -119,4 +155,4 @@ employeeschema.methods.generateReferralCode = function () {
   return result;
 };
 
-module.exports = mongoose.model("employee", employeeschema);
+module.exports = mongoose.model("Employee", employeeSchema);
