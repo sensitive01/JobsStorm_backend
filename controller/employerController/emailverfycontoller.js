@@ -250,12 +250,12 @@ const verifyEmailOtp = async (req, res) => {
     }
 
     // Check expiry
-    if (Date.now() > storedOtpData.otpExpires) {
-      delete req.app.locals.otps[userEmail];
-      return res
-        .status(400)
-        .json({ message: "OTP expired, please request a new one" });
-    }
+    // if (Date.now() > storedOtpData.otpExpires) {
+    //   delete req.app.locals.otps[userEmail];
+    //   return res
+    //     .status(400)
+    //     .json({ message: "OTP expired, please request a new one" });
+    // }
 
     // Compare OTP
     const isValid = await bcrypt.compare(otp, storedOtpData.otp);
