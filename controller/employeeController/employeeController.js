@@ -1313,14 +1313,13 @@ const getMyName = async (req, res) => {
       (await userModel.findOne({ _id: userId }, { userName: 1, _id: 0 })) ||
       (await Employer.findOne({ _id: userId }, { contactPerson: 1, _id: 0 }));
 
-
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     res.status(200).json({
       success: true,
-      userName: user?.userName||user?.contactPerson,
+      userName: user?.userName || user?.contactPerson,
     });
   } catch (err) {
     console.error("Error fetching user name:", err);
@@ -1371,8 +1370,131 @@ const bookDemoSchedule = async (req, res) => {
   }
 };
 
+const editUserData = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    console.log(req.body)
+
+    // Access text fields from FormData
+    const body = req.body;
+
+    console.log("Body",body)
+
+    // Parse arrays sent as JSON strings
+    const languages = body.languages ? JSON.parse(body.languages) : [];
+    const gradeLevels = body.gradeLevels ? JSON.parse(body.gradeLevels) : [];
+    const skills = body.skills ? JSON.parse(body.skills) : [];
+    const education = body.education ? JSON.parse(body.education) : [];
+    const workExperience = body.workExperience
+      ? JSON.parse(body.workExperience)
+      : [];
+
+    // Build update object
+    const updateData = {
+      userName: body.userName,
+      gender: body.gender,
+      dob: body.dob,
+      maritalStatus: body.maritalStatus,
+      languages,
+      userEmail: body.userEmail,
+      userMobile: body.userMobile,
+      addressLine1: body.addressLine1,
+      addressLine2: body.addressLine2,
+      city: body.city,
+      state: body.state,
+      pincode: body.pincode,
+      currentCity: body.currentCity,
+      preferredLocation: body.preferredLocation,
+      currentrole: body.currentrole,
+      specialization: body.specialization,
+      totalExperience: body.totalExperience,
+      expectedSalary: body.expectedSalary,
+      isAvailable: body.isAvailable === "true" || body.isAvailable === true,
+      gradeLevels,
+      skills,
+      education,
+      workExperience,
+      profilesummary: body.profilesummary,
+      github: body.github,
+      linkedin: body.linkedin,
+      portfolio: body.portfolio,
+    };
+
+    // Handle uploaded files
+    if (req.files.userProfilePic) {
+      updateData.userProfilePic = {
+        name: req.files.userProfilePic[0].originalname,
+        url: `/uploads/${req.files.userProfilePic[0].filename}`,
+      };
+    }
+
+    if (req.files.resume) {
+      updateData.resume = {
+        name: req.files.resume[0].originalname,
+        url: `/uploads/${req.files.resume[0].filename}`,
+      };
+    }
+
+    if (req.files.coverLetterFile) {
+      updateData.coverLetterFile = {
+        name: req.files.coverLetterFile[0].originalname,
+        url: `/uploads/${req.files.coverLetterFile[0].filename}`,
+      };
+    }
+
+    // Update employee document in MongoDB
+    const updatedEmployee = await Employee.findByIdAndUpdate(
+      userId,
+      { $set: updateData, updatedAt: Date.now() },
+      { new: true }
+    );
+
+    if (!updatedEmployee) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      data: updatedEmployee,
+    });
+  } catch (err) {
+    console.error("Error updating user:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+const getUserData = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // Find employee by ID
+    const employee = await Employee.findById(employeeId,{userPassword:0});
+
+    if (!employee) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Employee not found" });
+    }
+
+    // Send employee data
+    res.status(200).json({ success: true, data: employee });
+  } catch (err) {
+    console.error("Error fetching employee:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
 //hbh
 module.exports = {
+  getUserData,
+  editUserData,
   bookDemoSchedule,
   getMyName,
   addwithouttoeken,

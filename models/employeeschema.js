@@ -125,7 +125,11 @@ const employeeSchema = new mongoose.Schema({
   referralRewards: { type: Number, default: 0 },
 
   // 📸 Profile
-  userProfilePic: String,
+  userProfilePic: {
+    name: String,
+    url: String,
+  },
+
   profileImage: String,
 
   // 🕓 Metadata
