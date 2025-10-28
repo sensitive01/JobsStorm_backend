@@ -38,6 +38,7 @@ const applicationSchema = new mongoose.Schema({
   employApplicantStatus: { type: String, default: "Pending" },
   appliedDate: { type: Date, default: Date.now },
   notes: { type: String },
+  coverLetter:{ type: String }
 });
 
 // Saved jobs schema

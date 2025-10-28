@@ -262,40 +262,25 @@ const getEmployeeDetails = async (req, res) => {
 };
 const applyForJob = async (req, res) => {
   try {
-    const { jobId } = req.params;
-    const {
-      applicantId,
-      firstName,
-      email,
-      phone,
-      resume,
-      experience,
-      jobrole,
-      currentcity,
-      profileurl, // <-- Extract profileurl from body
-    } = req.body;
-
-    // Optionally validate required fields
-    // if (!applicantId || !firstName) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'Missing required fields'
-    //   });
-    // }
+    console.log("req.body", req.body);
+    const { jobId, candidateId } = req.params;
+    console.log("jobId, candidateId ", jobId, candidateId);
+    const { uploadedFileUrl, coverLetter } = req.body;
+    const candidateData = await Employee.findOne(
+      { _id: candidateId },
+      { userName: 1 }
+    );
 
     const application = {
-      applicantId,
-      firstName,
-      email,
-      phone,
-      jobrole,
-      experience,
-      currentcity,
+      applicantId: candidateId,
+      firstName: candidateData.userName,
+      email: candidateData.userEmail,
+      phone: candidateData.userMobile,
       resume: {
-        name: resume?.name || "resume.pdf",
-        url: resume?.url || "",
+        name:  `${candidateData.userName}_resume.pdf`,
+        url: uploadedFileUrl || "",
       },
-      profileurl, // <-- Add profileurl to application
+      coverLetter,
       status: "Applied",
     };
 
@@ -1373,12 +1358,12 @@ const bookDemoSchedule = async (req, res) => {
 const editUserData = async (req, res) => {
   try {
     const userId = req.params.userId;
-    console.log(req.body)
+    console.log(req.body);
 
     // Access text fields from FormData
     const body = req.body;
 
-    console.log("Body",body)
+    console.log("Body", body);
 
     // Parse arrays sent as JSON strings
     const languages = body.languages ? JSON.parse(body.languages) : [];
@@ -1473,7 +1458,7 @@ const getUserData = async (req, res) => {
     const { employeeId } = req.params;
 
     // Find employee by ID
-    const employee = await Employee.findById(employeeId,{userPassword:0});
+    const employee = await Employee.findById(employeeId, { userPassword: 0 });
 
     if (!employee) {
       return res
