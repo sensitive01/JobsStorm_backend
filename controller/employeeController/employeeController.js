@@ -277,7 +277,7 @@ const applyForJob = async (req, res) => {
       email: candidateData.userEmail,
       phone: candidateData.userMobile,
       resume: {
-        name:  `${candidateData.userName}_resume.pdf`,
+        name: `${candidateData.userName}_resume.pdf`,
         url: uploadedFileUrl || "",
       },
       coverLetter,
@@ -1476,8 +1476,192 @@ const getUserData = async (req, res) => {
   }
 };
 
+const getAppliedJobs = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+
+    const jobs = await Job.aggregate([
+      // 1️⃣ Match jobs that have an application with this candidateId
+      { $match: { "applications.applicantId": candidateId } },
+
+      // 2️⃣ Filter applications to include only this candidate's record
+      {
+        $addFields: {
+          applications: {
+            $filter: {
+              input: "$applications",
+              as: "app",
+              cond: { $eq: ["$$app.applicantId", candidateId] },
+            },
+          },
+        },
+      },
+
+      // 3️⃣ Optionally, pick which job fields to return
+      {
+        $project: {
+          jobTitle: 1,
+          companyName: 1,
+          location: 1,
+          jobType: 1,
+          salaryFrom: 1,
+          salaryTo: 1,
+          skills: 1,
+          applications: 1,
+          createdAt: 1,
+          experienceLevel: 1,
+        },
+      },
+    ]);
+
+    if (!jobs || jobs.length === 0) {
+      return res.status(404).json({
+        message: "No applied jobs found for this candidate.",
+      });
+    }
+
+    res.status(200).json({
+      message: "Applied jobs fetched successfully",
+      data: jobs,
+    });
+  } catch (err) {
+    console.error("Error in getting applied jobs:", err);
+    res.status(500).json({
+      message: "Server error while fetching applied jobs",
+    });
+  }
+};
+
+const candidateSaveJob = async (req, res) => {
+  try {
+    const { candidateId, jobId } = req.params;
+    console.log("Candidate:", candidateId, "Job:", jobId);
+
+    // 1️⃣ Find candidate
+    const candidate = await Employee.findById(candidateId);
+    if (!candidate) {
+      return res.status(404).json({ message: "Candidate not found" });
+    }
+
+    // 2️⃣ Check if job is already saved
+    const isSaved = candidate.savedJobs.includes(jobId);
+
+    if (isSaved) {
+      // 3️⃣ Remove job from saved list
+      candidate.savedJobs = candidate.savedJobs.filter((id) => id !== jobId);
+      await candidate.save();
+      return res.status(200).json({
+        message: "Job removed from saved list",
+        savedJobs: candidate.savedJobs,
+      });
+    } else {
+      // 4️⃣ Add job to saved list
+      candidate.savedJobs.push(jobId);
+      await candidate.save();
+      return res.status(200).json({
+        message: "Job saved successfully",
+        savedJobs: candidate.savedJobs,
+      });
+    }
+  } catch (err) {
+    console.error("Error in saving/removing job:", err);
+    res.status(500).json({ message: "Server error while saving job" });
+  }
+};
+
+const getSavedJobs = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // 1️⃣ Find employee and select only savedJobs
+    const candidateData = await Employee.findById(employeeId, {
+      savedJobs: 1,
+    }).lean();
+
+    if (!candidateData) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // 2️⃣ If no saved jobs
+    if (!candidateData.savedJobs || candidateData.savedJobs.length === 0) {
+      return res.status(200).json({
+        message: "No saved jobs found",
+        savedJobs: [],
+      });
+    }
+
+    // 3️⃣ Return saved jobs
+    res.status(200).json({
+      message: "Saved jobs fetched successfully",
+      savedJobs: candidateData.savedJobs,
+    });
+  } catch (err) {
+    console.error("Error fetching saved jobs:", err);
+    res.status(500).json({
+      message: "Server error while fetching saved jobs",
+      error: err.message,
+    });
+  }
+};
+
+const getSavedJobDetails = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // 1️⃣ Find employee with savedJobs
+    const employeeData = await Employee.findById(employeeId, {
+      savedJobs: 1,
+    }).lean();
+
+    if (!employeeData) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // 2️⃣ If no saved jobs
+    if (!employeeData.savedJobs || employeeData.savedJobs.length === 0) {
+      return res.status(200).json({
+        message: "No saved jobs found",
+        savedJobs: [],
+      });
+    }
+
+    // 3️⃣ Fetch all job details for savedJobs
+    const jobs = await Job.find({
+      _id: { $in: employeeData.savedJobs },
+    }).lean();
+
+    // 4️⃣ Filter each job’s applications to only this employee’s
+    const filteredJobs = jobs.map((job) => {
+      const candidateApplication = job.applications?.filter(
+        (app) => app.applicantId?.toString() === employeeId
+      );
+
+      return {
+        ...job,
+        applications: candidateApplication, // only this candidate’s app
+      };
+    });
+
+    // 5️⃣ Send response
+    res.status(200).json({
+      message: "Saved jobs fetched successfully",
+      savedJobs: filteredJobs,
+    });
+  } catch (err) {
+    console.error("Error fetching saved jobs:", err);
+    res.status(500).json({
+      message: "Server error while fetching saved jobs",
+      error: err.message,
+    });
+  }
+};
+
 //hbh
 module.exports = {
+  getSavedJobDetails,
+  getSavedJobs,
+  candidateSaveJob,
+  getAppliedJobs,
   getUserData,
   editUserData,
   bookDemoSchedule,

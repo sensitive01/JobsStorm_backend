@@ -2,19 +2,19 @@ const mongoose = require("mongoose");
 
 // 🔹 Education Subschema
 const educationSchema = new mongoose.Schema({
-  type: { type: String,  }, // e.g., "Degree", "Diploma"
-  degree: { type: String,  }, // e.g., "B.Sc", "B.Ed"
-  institution: { type: String,  },
-  startDate: { type: String,  }, // MM/YYYY
+  type: { type: String }, // e.g., "Degree", "Diploma"
+  degree: { type: String }, // e.g., "B.Sc", "B.Ed"
+  institution: { type: String },
+  startDate: { type: String }, // MM/YYYY
   endDate: { type: String }, // MM/YYYY (optional)
 });
 
 // 🔹 Work Experience Subschema
 const workExperienceSchema = new mongoose.Schema({
-  position: { type: String,  },
-  company: { type: String,  },
-  employmentType: { type: String,  }, // "Full-time", "Part-time"
-  startDate: { type: String,  }, // MM/YYYY
+  position: { type: String },
+  company: { type: String },
+  employmentType: { type: String }, // "Full-time", "Part-time"
+  startDate: { type: String }, // MM/YYYY
   endDate: { type: String }, // MM/YYYY (optional)
   description: String,
 });
@@ -131,6 +131,7 @@ const employeeSchema = new mongoose.Schema({
   },
 
   profileImage: String,
+  savedJobs: [{ type: String }],
 
   // 🕓 Metadata
   createdAt: { type: Date, default: Date.now },

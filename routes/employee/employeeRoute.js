@@ -84,6 +84,11 @@ const dynamicUploadMiddleware = (req, res, next) => {
 // ====================================================
 employeeRoute.get("/get-my-name/:userId", employeeController.getMyName);
 employeeRoute.get("/get-user-data/:employeeId", employeeController.getUserData);
+employeeRoute.get("/get-saved-jobs/:employeeId", employeeController.getSavedJobs);
+employeeRoute.get("/get-saved-jobs-details/:employeeId", employeeController.getSavedJobDetails);
+
+
+
 
 employeeRoute.get("/fetchallemployee", employeeController.getAllEmployees);
 employeeRoute.get("/fetchemployee/:id", employeeController.getEmployeeDetails);
@@ -144,6 +149,10 @@ employeeRoute.post(
   employeeController.applyForJob
 );
 
+employeeRoute.get("/get-applied-jobs/:candidateId", employeeController.getAppliedJobs);
+
+
+
 employeeRoute.post("/google", employeeController.googleAuth);
 employeeRoute.post("/apple", employeeController.appleAuth);
 
@@ -158,6 +167,10 @@ employeeRoute.post("/addjobtoken", employeeController.addwithouttoeken);
 // ====================================================
 // 🔹 PUT Routes
 // ====================================================
+
+employeeRoute.put("/candidate-save-job/:candidateId/:jobId", employeeController.candidateSaveJob);
+
+
 employeeRoute.put(
   "/uploadfile/:employid",
   dynamicUploadMiddleware,
