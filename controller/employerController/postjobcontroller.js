@@ -1016,7 +1016,85 @@ const updateJobActiveStatus = async (req, res) => {
   }
 };
 
+const updateCandidateJobApplicationStatus = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { applicationId, newStatus, additionalData = {} } = req.body;
+
+    console.log("jobId:", jobId);
+    console.log(
+      "applicationId, newStatus, additionalData:",
+      applicationId,
+      newStatus,
+      additionalData
+    );
+
+    // Find job that contains this application
+    const job = await Job.findOne({
+      _id: jobId,
+      "applications._id": applicationId,
+    });
+    if (!job) {
+      return res.status(404).json({ message: "Job or application not found" });
+    }
+
+    // Locate the specific application
+    const application = job.applications.id(applicationId);
+    if (!application) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    // ✅ Update status
+    application.employApplicantStatus = newStatus;
+    application.lastUpdateStatusDate = new Date();
+
+    // ✅ If additional data provided, update interview fields
+    if (additionalData.interviewDate)
+      application.interviewDate = additionalData.interviewDate;
+    if (additionalData.interviewTime)
+      application.interviewTime = additionalData.interviewTime;
+    if (additionalData.interviewNotes)
+      application.notes = additionalData.interviewNotes;
+    if (additionalData.interviewLink)
+      application.interviewLink = additionalData.interviewLink;
+    if (additionalData.interviewVenue)
+      application.interviewVenue = additionalData.interviewVenue;
+
+    // ✅ Push a new record to statusHistory
+    application.statusHistory.push({
+      interviewType:
+        additionalData.interviewType || application.interviewType || "",
+      interviewDate:
+        additionalData.interviewDate || application.interviewDate || null,
+      interviewTime:
+        additionalData.interviewTime || application.interviewTime || "",
+      interviewLink:
+        additionalData.interviewLink || application.interviewLink || "",
+      interviewVenue:
+        additionalData.interviewVenue || application.interviewVenue || "",
+      status: newStatus,
+      notes: additionalData.interviewNotes || "",
+      updatedAt: new Date(),
+    });
+
+    // ✅ Save the parent document
+    await job.save();
+
+    res.status(200).json({
+      message: "Application status updated successfully",
+      updatedApplication: application,
+    });
+  } catch (err) {
+    console.error("Error updating candidate job application status:", err);
+    res.status(500).json({
+      message: "Error updating candidate job application status",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
+  updateCandidateJobApplicationStatus,
   changeJobStatus,
   updateJobActiveStatus,
   toggleSaveJob,
