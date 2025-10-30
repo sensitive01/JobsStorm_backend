@@ -82,8 +82,13 @@ const dynamicUploadMiddlewareNew = (req, res, next) => {
 // ==========================  GET ROUTES  =========================
 // ================================================================
 employerRoute.get("/fetchjob/:employid", jobController.getJobsByEmployee);
+employerRoute.get("/get-active-job-data/:employid", jobController.getActiveJobData);
+employerRoute.get("/get-inactive-job-data/:employid", jobController.getInActiveJobData);
 employerRoute.get("/viewjobs/:id", jobController.getJobById);
-
+employerRoute.get("/update-is-subscription-active", jobController.updateIsSubscriptionActive);
+employerRoute.get("/get-job-post-count-exceeded-or-not/:employerId", jobController.getEmployerJobCountExeedOrNot);
+employerRoute.get("/get-candidate-database-data", jobController.getCandidateDataBaseData);
+employerRoute.get("/get-candidate-details/:candidateId", jobController.getCandidateData);
 
 
 
@@ -250,7 +255,7 @@ employerRoute.post("/apple", employerController.appleAuth);
 // ================================================================
 
 employerRoute.put("/editjob/:id", jobController.updateJobById);
-employerRoute.put("/editjob-status/:id", jobController.changeJobStatus);
+employerRoute.put("/editjob-status/:id/:employeeId", jobController.changeJobStatus);
 employerRoute.put("/update-candidate-job-application-status/:jobId", jobController.updateCandidateJobApplicationStatus);
 
 

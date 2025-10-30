@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Job = require("../../models/jobSchema");
 const Employer = require("../../models/employerSchema");
+const Employee = require("../../models/employeeschema");
 const SavedCandidate = require("../../models/savedcandiSchema");
 const getJobTitleByJobId = async (req, res) => {
   try {
@@ -46,25 +47,60 @@ const updateJobById = async (req, res) => {
 
 const changeJobStatus = async (req, res) => {
   try {
-    const { id } = req.params; // Job _id from URL
+    const { id, employeeId } = req.params; // Job ID and Employer ID
 
-    const updatedJob = await Job.findByIdAndUpdate(
-      id,
-      { isActive: false, updatedAt: Date.now() },
-      { new: true, runValidators: true }
-    );
+    // 1️⃣ Fetch the employer details
+    const employer = await Employer.findById(employeeId, {
+      isSubscriptionActive: 1,
+    });
 
-    if (!updatedJob) {
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // 2️⃣ Fetch the job to change its current status
+    const job = await Job.findById(id);
+    if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
 
+    // 3️⃣ Determine new status (toggle)
+    const newStatus = !job.isActive;
+
+    // 4️⃣ If employer does not have subscription and trying to activate
+    if (!employer.isSubscriptionActive && newStatus === true) {
+      const alreadyActiveJob = await Job.findOne({
+        employId: employeeId,
+        isActive: true,
+        _id: { $ne: id },
+      });
+
+      if (alreadyActiveJob) {
+        return res.status(403).json({
+          message:
+            "Currently one job is active. Without a subscription, you cannot activate another job.",
+        });
+      }
+    }
+
+    // 5️⃣ Update the job’s status
+    job.isActive = newStatus;
+    job.updatedAt = Date.now();
+    await job.save();
+
+    // 6️⃣ Respond to client
     res.status(200).json({
-      message: "Job deactivated successfully",
-      job: updatedJob,
+      message: `Job has been ${
+        newStatus ? "activated" : "deactivated"
+      } successfully.`,
+      job,
     });
   } catch (error) {
-    console.error("Error updating job:", error);
-    res.status(500).json({ message: "Server error", error });
+    console.error("Error updating job status:", error);
+    res.status(500).json({
+      message: "Server error while updating job status",
+      error: error.message,
+    });
   }
 };
 
@@ -90,7 +126,6 @@ const generateJobId = async () => {
 const createJob = async (req, res) => {
   try {
     const { jobData } = req.body;
-    console.log("jobData", jobData);
     const { empId } = req.params;
 
     const employer = await Employer.findById(empId);
@@ -99,30 +134,32 @@ const createJob = async (req, res) => {
       return res.status(404).json({ message: "Employer not found" });
     }
 
-    if (employer.totaljobpostinglimit <= 0) {
-      return res.status(403).json({
-        message: "Job posting limit reached. Please upgrade your subscription.",
-      });
-    }
-
-    // Generate a unique Job ID
     const jobId = await generateJobId();
 
-    // Include employer ID and jobId in the job data
+    // Determine job active state
+    let isActive = employer.totaljobpostinglimit > 0;
+
     const newJob = new Job({
       ...jobData,
-      employId: empId, // make sure your Job schema has an "employer" field
-      jobId, // make sure your Job schema has a "jobId" field
+      employId: empId,
+      jobId,
+      isActive,
     });
 
     const savedJob = await newJob.save();
 
-    // Decrease the job posting limit
-    employer.totaljobpostinglimit -= 1;
-    await employer.save();
+    // Decrease the job posting limit only if the job is active
+    if (isActive) {
+      employer.totaljobpostinglimit -= 1;
+      await employer.save();
+    }
 
-    res.status(201).json({ message: "Job Posted Successfully", savedJob });
+    res.status(201).json({
+      message: `Job Posted Successfully${!isActive ? " (Inactive)" : ""}`,
+      savedJob,
+    });
   } catch (error) {
+    console.error("Error in createJob:", error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -255,6 +292,112 @@ const getJobsByEmployee = async (req, res) => {
       {
         $lookup: {
           from: "employers", // MongoDB auto-pluralizes 'Employer' model
+          localField: "employidObject",
+          foreignField: "_id",
+          as: "employerInfo",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employerInfo",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          employerProfilePic: "$employerInfo.userProfilePic",
+          employerName: {
+            $concat: ["$employerInfo.firstName", " ", "$employerInfo.lastName"],
+          },
+        },
+      },
+      {
+        $project: {
+          employerInfo: 0,
+          employidObject: 0,
+        },
+      },
+    ]);
+
+    res.status(200).json(jobs);
+  } catch (error) {
+    console.error("Failed to fetch jobs with employer data:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getActiveJobData = async (req, res) => {
+  try {
+    const jobs = await Job.aggregate([
+      {
+        $match: { employId: req.params.employid, isActive: true },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $addFields: {
+          employidObject: {
+            $toObjectId: "$employid",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "employers",
+          localField: "employidObject",
+          foreignField: "_id",
+          as: "employerInfo",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employerInfo",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          employerProfilePic: "$employerInfo.userProfilePic",
+          employerName: {
+            $concat: ["$employerInfo.firstName", " ", "$employerInfo.lastName"],
+          },
+        },
+      },
+      {
+        $project: {
+          employerInfo: 0,
+          employidObject: 0,
+        },
+      },
+    ]);
+
+    res.status(200).json(jobs);
+  } catch (error) {
+    console.error("Failed to fetch jobs with employer data:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getInActiveJobData = async (req, res) => {
+  try {
+    const jobs = await Job.aggregate([
+      {
+        $match: { employId: req.params.employid, isActive: false },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $addFields: {
+          employidObject: {
+            $toObjectId: "$employid",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "employers",
           localField: "employidObject",
           foreignField: "_id",
           as: "employerInfo",
@@ -1093,7 +1236,170 @@ const updateCandidateJobApplicationStatus = async (req, res) => {
   }
 };
 
+const updateIsSubscriptionActive = async (req, res) => {
+  try {
+    const result = await Employer.updateMany(
+      {},
+      { $set: { totaljobpostinglimit: 1 } }
+    );
+
+    console.log("updated....");
+
+    res.status(200).json({
+      message: "All employers' subscription status updated to false",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Error updating subscription status",
+      error: err.message,
+    });
+  }
+};
+
+const getEmployerJobCountExeedOrNot = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    // 1️⃣ Get employer data
+    const employerData = await Employer.findOne(
+      { _id: employerId },
+      { isSubscriptionActive: 1, totaljobpostinglimit: 1 }
+    );
+
+    if (!employerData) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // 3️⃣ Check posting limit
+    let canPost;
+    let message = "";
+
+    if (
+      employerData.isSubscriptionActive &&
+      employerData?.totaljobpostinglimit !== 0
+    ) {
+      canPost = true;
+    } else {
+      canPost = false;
+      message =
+        "You have reached your job posting limit. Upgrade your plan to post more active jobs.";
+    }
+
+    // 4️⃣ Return response
+    return res.status(200).json({
+      success: true,
+      canPost,
+      message,
+    });
+  } catch (err) {
+    console.log("Error in getting the employer job count exceed or not", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while checking job posting limit",
+      error: err.message,
+    });
+  }
+};
+
+const getCandidateDataBaseData = async (req, res) => {
+  try {
+    const candidateDatabase = await Employee.find(
+      {},
+      { userName: 1, userEmail: 1, userMobile: 1, currentrole: 1 }
+    );
+
+    if (!candidateDatabase || candidateDatabase.length === 0) {
+      return res.status(404).json({
+        message: "No candidate data found",
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      message: "Candidate database fetched successfully",
+      data: candidateDatabase,
+    });
+  } catch (err) {
+    console.error("Error in getting the candidate database:", err);
+    res.status(500).json({
+      message: "Server error while fetching candidate data",
+      error: err.message,
+    });
+  }
+};
+
+const getCandidateData = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+
+    const candidateData = await Employee.findOne(
+      { _id: candidateId },
+      {
+        userName: 1,
+        gender: 1,
+        dob: 1,
+        maritalStatus: 1,
+        languages: 1,
+        addressLine1: 1,
+        addressLine2: 1,
+        city: 1,
+        state: 1,
+        pincode: 1,
+        currentCity: 1,
+        preferredLocation: 1,
+        countryCode: 1,
+        userEmail: 1,
+        userMobile: 1,
+        currentrole: 1,
+        specialization: 1,
+        gradeLevels: 1,
+        totalExperience: 1,
+        expectedSalary: 1,
+        isAvailable: 1,
+        education: 1,
+        workExperience: 1,
+        skills: 1,
+        profilesummary: 1,
+        resume: 1,
+        github: 1,
+        linkedin: 1,
+        portfolio: 1,
+        userProfilePic: 1,
+        profileImage: 1,
+      }
+    );
+
+    if (!candidateData) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Candidate data fetched successfully",
+      data: candidateData,
+    });
+  } catch (err) {
+    console.log("Error in getCandidateData:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
+  getCandidateData,
+  getCandidateDataBaseData,
+  getInActiveJobData,
+  getActiveJobData,
+  getEmployerJobCountExeedOrNot,
+  updateIsSubscriptionActive,
   updateCandidateJobApplicationStatus,
   changeJobStatus,
   updateJobActiveStatus,

@@ -5,10 +5,8 @@ const employerSchema = new mongoose.Schema({
   uuid: { type: String, unique: true },
   googleId: String,
   appleId: String,
-  role:{type:String,default:"employer"},
+  role: { type: String, default: "employer" },
 
-
-  
   // 🔹 Contact Details
   contactPerson: String,
   contactEmail: String,
@@ -60,7 +58,7 @@ const employerSchema = new mongoose.Schema({
   totalperdaylimit: { type: Number, default: 0 },
   totalprofileviews: { type: Number, default: 0 },
   totaldownloadresume: { type: Number, default: 0 },
-  totaljobpostinglimit: { type: Number, default: 5 },
+  totaljobpostinglimit: { type: Number, default: 0 },
 
   // 🔹 Subscription System
   subscriptions: {
@@ -88,6 +86,7 @@ const employerSchema = new mongoose.Schema({
     startDate: Date,
     endDate: Date,
   },
+  isSubscriptionActive: { type: Boolean, defalt: false },
 
   subscriptionleft: { type: Number, default: 0 },
   subscription: { type: String, default: "false" },
