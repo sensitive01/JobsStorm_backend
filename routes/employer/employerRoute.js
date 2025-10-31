@@ -89,6 +89,7 @@ employerRoute.get("/update-is-subscription-active", jobController.updateIsSubscr
 employerRoute.get("/get-job-post-count-exceeded-or-not/:employerId", jobController.getEmployerJobCountExeedOrNot);
 employerRoute.get("/get-candidate-database-data", jobController.getCandidateDataBaseData);
 employerRoute.get("/get-candidate-details/:candidateId", jobController.getCandidateData);
+employerRoute.get("/get-shortlisted-candidate-data/:employerId", jobController.getShortListedCandidateData);
 
 
 

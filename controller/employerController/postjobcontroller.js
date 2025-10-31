@@ -1393,7 +1393,51 @@ const getCandidateData = async (req, res) => {
   }
 };
 
+const getShortListedCandidateData = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    // Step 1: Find all jobs posted by this employer
+    const jobs = await Job.find({ employId: employerId });
+    console.log(jobs)
+
+    // Step 2: Extract shortlisted candidates from each job
+    const shortlistedData = [];
+
+    jobs.forEach((job) => {
+      const shortlistedCandidates = job.applications.filter(
+        (app) => app.employApplicantStatus === "Shortlisted"
+      );
+
+      shortlistedCandidates.forEach((candidate) => {
+        shortlistedData.push({
+          jobId: job._id,
+          jobTitle: job.jobTitle,
+          companyName: job.companyName,
+          location: job.location,
+          candidate: candidate,
+        });
+      });
+    });
+
+    // Step 3: Return data
+    return res.status(200).json({
+      success: true,
+      message: "Shortlisted candidate data fetched successfully",
+      data: shortlistedData,
+    });
+  } catch (err) {
+    console.error("Error in getShortListedCandidateData:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching shortlisted candidates",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
+  getShortListedCandidateData,
   getCandidateData,
   getCandidateDataBaseData,
   getInActiveJobData,
