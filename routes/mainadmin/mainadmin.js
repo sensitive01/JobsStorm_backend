@@ -114,6 +114,11 @@ mainadminRoute.get(
 ──────────────────────────────────────────────── */
 mainadminRoute.post("/signup", adminLoginController.adminSignup);
 mainadminRoute.post("/login", adminLoginController.adminVerification);
+mainadminRoute.post("/post-blogs", adminfunction.postBlogs);
+mainadminRoute.get("/get-all-blogs", adminfunction.getAllBlogs);
+mainadminRoute.get("/get-blogs/:id", adminfunction.getBlogData);
+mainadminRoute.put("/update-blog-data/:id", adminfunction.updateBlogdata);
+mainadminRoute.delete("/delete-blog-data/:id", adminfunction.deleteBlogData);
 mainadminRoute.get(
   "/fetchallemployeradmin",
   adminLoginController.getAllEmployerAdmins

@@ -5,6 +5,7 @@ const employerController = require("../../controller/adminController/adminfuncti
 const Employer = require("../../models/employerSchema");
 const Employee = require("../../models/employeeschema");
 const Employeradmin = require("../../models/employeradminSchema");
+const Blog = require("../../models/blogSchema");
 
 const Job = require("../../models/jobSchema");
 // Approve a single employer
@@ -654,11 +655,11 @@ exports.getJobDetails = async (req, res) => {
 };
 
 
-exports.updateJobDetails= async (req, res) => {
+exports.updateJobDetails = async (req, res) => {
   try {
     const { jobId } = req.params; // _id from URL
-    const {updatedData} = req.body; // New data to overwrite existing
-    console.log("updatedData",updatedData)
+    const { updatedData } = req.body; // New data to overwrite existing
+    console.log("updatedData", updatedData)
 
     const updatedJob = await Job.findByIdAndUpdate(
       jobId,
@@ -674,5 +675,181 @@ exports.updateJobDetails= async (req, res) => {
   } catch (error) {
     console.error("Error updating job:", error);
     res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+
+exports.postBlogs = async (req, res) => {
+  try {
+    const { data } = req.body;
+    console.log("Received Blog Data:", data);
+
+    // Validate
+    if (!data.title || !data.category || !data.description || !data.author || !data.authorRole) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
+
+    // Create & Save
+    const newBlog = await Blog.create({
+      title: data.title,
+      category: data.category,
+      description: data.description,
+      author: data.author,
+      authorRole: data.authorRole,
+      image: data.image,
+      authorImage: data.authorImage
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Blog posted successfully",
+      blog: newBlog
+    });
+
+  } catch (err) {
+    console.error("❌ Error blog post", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during blog post.",
+      error: err.message,
+    });
+  }
+};
+
+exports.getAllBlogs = async (req, res) => {
+  try {
+    const blogs = await Blog.find();
+    return res.status(200).json({
+      success: true,
+      message: "Blogs fetched successfully",
+      blogs: blogs
+    });
+
+  } catch (err) {
+    console.error("❌ Error getting blog", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during getting blog data.",
+      error: err.message,
+    });
+  }
+};
+
+exports.getBlogData = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const blogs = await Blog.findOne({ _id: id });
+    return res.status(200).json({
+      success: true,
+      message: "Blogs fetched successfully",
+      blogs: blogs
+    });
+
+  } catch (err) {
+    console.error("❌ Error getting blog", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during getting blog data.",
+      error: err.message,
+    });
+  }
+};
+
+exports.updateBlogdata = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Blog ID is required"
+      });
+    }
+
+    if (!data || Object.keys(data).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No data provided for update"
+      });
+    }
+
+    const updatedBlog = await Blog.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          title: data.title,
+          category: data.category,
+          description: data.description,
+          author: data.author,
+          authorRole: data.authorRole,
+          image: data.image,
+          authorImage: data.authorImage
+        }
+      },
+      { new: true } // returns updated document
+    );
+
+    if (!updatedBlog) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Blog updated successfully",
+      blog: updatedBlog
+    });
+
+  } catch (err) {
+    console.error("❌ Error updating blog", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during update.",
+      error: err.message,
+    });
+  }
+};
+
+
+exports.deleteBlogData = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Blog ID is required",
+      });
+    }
+
+    const deletedBlog = await Blog.findByIdAndDelete(id);
+
+    if (!deletedBlog) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Blog deleted successfully",
+      deletedBlog,
+    });
+
+  } catch (err) {
+    console.error("❌ Error deleting blog", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during delete.",
+      error: err.message,
+    });
   }
 };

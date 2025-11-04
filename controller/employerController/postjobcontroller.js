@@ -90,9 +90,8 @@ const changeJobStatus = async (req, res) => {
 
     // 6️⃣ Respond to client
     res.status(200).json({
-      message: `Job has been ${
-        newStatus ? "activated" : "deactivated"
-      } successfully.`,
+      message: `Job has been ${newStatus ? "activated" : "deactivated"
+        } successfully.`,
       job,
     });
   } catch (error) {
@@ -166,41 +165,71 @@ const createJob = async (req, res) => {
 
 const getAllJobs = async (req, res) => {
   try {
+    const { category, jobTitle, location, experience } = req.query;
+
+    const filterConditions = {};
+
+    if (category) filterConditions.category = { $regex: category, $options: "i" };
+    if (location) filterConditions.location = { $regex: location, $options: "i" };
+    if (experience) filterConditions.experience = { $regex: experience, $options: "i" };
+
+    if (jobTitle) {
+      filterConditions.$or = [
+        { jobTitle: { $regex: jobTitle, $options: "i" } },
+        { companyName: { $regex: jobTitle, $options: "i" } }
+      ];
+    }
+
     const jobs = await Job.aggregate([
-      {
-        $sort: { createdAt: -1 },
-      },
+      { $match: filterConditions },
+
+      { $sort: { createdAt: -1 } },
+
       {
         $addFields: {
-          employidObject: { $toObjectId: "$employid" },
+          employidObject: {
+            $cond: {
+              if: { $regexMatch: { input: "$employid", regex: /^[0-9a-fA-F]{24}$/ } },
+              then: { $toObjectId: "$employid" },
+              else: null,
+            },
+          },
         },
       },
+
       {
         $lookup: {
-          from: "employers", // match with collection name, which is auto pluralized
+          from: "employers",
           localField: "employidObject",
           foreignField: "_id",
           as: "employerInfo",
         },
       },
+
       {
         $unwind: {
           path: "$employerInfo",
           preserveNullAndEmptyArrays: true,
         },
       },
+
       {
         $addFields: {
-          employerProfilePic: "$employerInfo.userProfilePic",
+          employerProfilePic: { $ifNull: ["$employerInfo.userProfilePic", null] },
           employerName: {
-            $concat: [
-              { $ifNull: ["$employerInfo.firstName", ""] },
-              " ",
-              { $ifNull: ["$employerInfo.lastName", ""] },
-            ],
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employerInfo.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employerInfo.lastName", ""] },
+                ],
+              },
+            },
           },
         },
       },
+
       {
         $project: {
           employidObject: 0,
@@ -215,6 +244,8 @@ const getAllJobs = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // GET /api/jobs/:id
 const getJobById = async (req, res) => {
@@ -1148,9 +1179,8 @@ const updateJobActiveStatus = async (req, res) => {
     }
 
     res.status(200).json({
-      message: `Job has been ${
-        isActive ? "activated" : "deactivated"
-      } successfully.`,
+      message: `Job has been ${isActive ? "activated" : "deactivated"
+        } successfully.`,
       job,
     });
   } catch (error) {

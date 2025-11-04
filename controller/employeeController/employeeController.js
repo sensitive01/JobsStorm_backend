@@ -25,6 +25,7 @@ const appleKeysClient = jwksClient({
 });
 const mongoose = require("mongoose");
 const JobFilter = require("../../models/jobAlertModal");
+const blogSchema = require("../../models/blogSchema");
 
 // Email/Mobile Signup
 const signUp = async (req, res) => {
@@ -643,13 +644,13 @@ const calculateProfileCompletion = (employee) => {
   // Calculate Total
   report.total = Math.round(
     report.basicInfo +
-      report.address +
-      report.education +
-      report.workExperience +
-      report.profileDetails +
-      report.documents +
-      report.socialLinks +
-      report.jobPreferences
+    report.address +
+    report.education +
+    report.workExperience +
+    report.profileDetails +
+    report.documents +
+    report.socialLinks +
+    report.jobPreferences
   );
 
   return report;
@@ -1656,8 +1657,125 @@ const getSavedJobDetails = async (req, res) => {
   }
 };
 
+const getCompanyNameOrJobName = async (req, res) => {
+  try {
+    const jobData = await Job.aggregate([
+      {
+        $addFields: {
+          normalizedLocation: {
+            $trim: { input: { $toLower: "$location" } } // convert to lowercase + trim
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            jobTitle: "$jobTitle",
+            category: "$category",
+            companyName: "$companyName",
+            location: "$normalizedLocation"
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          jobTitle: "$_id.jobTitle",
+          category: "$_id.category",
+          companyName: "$_id.companyName",
+          location: "$_id.location"
+        }
+      }
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched unique job/company/location list successfully",
+      data: jobData
+    });
+  } catch (err) {
+    console.log("Error in fetching job/company names:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching job/company names",
+      error: err.message
+    });
+  }
+};
+
+
+const getFeaturedJobs = async (req, res) => {
+  try {
+    const { jobType } = req.params;
+    console.log("jobType:", jobType);
+
+    let jobs;
+
+    if (jobType === "recent") {
+      // Latest 4 jobs
+      jobs = await Job.find().sort({ createdAt: -1 }).limit(4);
+    }
+    else if (jobType === "featured") {
+      // Random 4 jobs
+      jobs = await Job.aggregate([{ $sample: { size: 4 } }]);
+    }
+    else if (["freelancer", "part-time", "full-time"].includes(jobType.toLowerCase())) {
+      // Job type filter
+      jobs = await Job.find({ jobType: { $regex: jobType, $options: "i" } });
+    }
+    else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid jobType parameter"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: jobs.length,
+      data: jobs
+    });
+
+  } catch (error) {
+    console.log("Error in fetching featured jobs:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching featured jobs",
+      error: error.message
+    });
+  }
+};
+
+const getAllBlogs = async (req, res) => {
+  try {
+    const blogData = await blogSchema.find().sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Blogs fetched successfully",
+      blogs: blogData,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching blogs:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching blogs",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+
+
 //hbh
 module.exports = {
+  getAllBlogs,
+  getFeaturedJobs,
+  getCompanyNameOrJobName,
   getSavedJobDetails,
   getSavedJobs,
   candidateSaveJob,

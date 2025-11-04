@@ -86,7 +86,9 @@ employeeRoute.get("/get-my-name/:userId", employeeController.getMyName);
 employeeRoute.get("/get-user-data/:employeeId", employeeController.getUserData);
 employeeRoute.get("/get-saved-jobs/:employeeId", employeeController.getSavedJobs);
 employeeRoute.get("/get-saved-jobs-details/:employeeId", employeeController.getSavedJobDetails);
-
+employeeRoute.get("/get-company-name-or-job-name", employeeController.getCompanyNameOrJobName);
+employeeRoute.get("/get-jobs-by-type/:jobType", employeeController.getFeaturedJobs);
+employeeRoute.get("/get-all-blogs", employeeController.getAllBlogs);
 
 
 
