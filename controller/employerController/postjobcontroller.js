@@ -170,11 +170,20 @@ const getAllJobs = async (req, res) => {
     const filterConditions = {};
 
     if (category) filterConditions.category = { $regex: category, $options: "i" };
-    if (location) filterConditions.location = { $regex: location, $options: "i" };
     if (experience) filterConditions.experience = { $regex: experience, $options: "i" };
+    
+    // Search in both location and region fields
+    if (location) {
+        filterConditions.$or = [
+            ...(filterConditions.$or || []),
+            { location: { $regex: location, $options: "i" } },
+            { region: { $regex: location, $options: "i" } }
+        ];
+    }
 
     if (jobTitle) {
       filterConditions.$or = [
+        ...(filterConditions.$or || []),
         { jobTitle: { $regex: jobTitle, $options: "i" } },
         { companyName: { $regex: jobTitle, $options: "i" } }
       ];

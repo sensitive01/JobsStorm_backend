@@ -101,6 +101,7 @@ const jobSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    region:{type:String}
   },
   { timestamps: true }
 ); // auto-manage createdAt and updatedAt

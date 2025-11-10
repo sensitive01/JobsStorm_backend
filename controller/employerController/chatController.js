@@ -107,9 +107,7 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// Add other chat controller functions as needed...
 
-// Multer middleware for handling file uploads
 
 
 exports.getChatMessagesByJobId = async (req, res) => {

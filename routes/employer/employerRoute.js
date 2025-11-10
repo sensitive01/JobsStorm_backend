@@ -182,6 +182,7 @@ employerRoute.get(
 employerRoute.post("/signup", employerController.signUp);
 employerRoute.post("/login", employerController.login);
 employerRoute.post("/postjob/:empId", jobController.createJob);
+// employerRoute.post("/create-chat-room/:employerId/:candidateId", chatController.createChatRoom);
 
 
 
