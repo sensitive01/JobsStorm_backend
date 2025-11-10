@@ -1767,12 +1767,69 @@ const getAllBlogs = async (req, res) => {
 };
 
 
+const getDistinctCategoryLocation = async (req, res) => {
+  try {
+    // Get distinct categories
+    const categories = await Job.distinct("category");
+
+
+    const regions = await Job.distinct("region");
+    const experience = await Job.distinct("experienceLevel");
+
+    // Combine locations + regions and get unique values
+    const allLocations = Array.from(new Set([...regions]));
+
+    return res.status(200).json({
+      success: true,
+      message: "Distinct categories and locations fetched successfully",
+      categories: categories.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
+      locations: allLocations.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
+      experience: experience.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching distinct categories/locations:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching distinct categories/locations",
+      error: err.message,
+    });
+  }
+};
+
+const getRandomBlogs = async (req, res) => {
+  try {
+    const randomBlogs = await blogSchema.aggregate([
+      { $sample: { size: 3 } }, // Fetch 3 random blogs
+    ]);
+
+    console.log("randomBlogs",randomBlogs)
+
+    return res.status(200).json({
+      success: true,
+      message: "Random blogs fetched successfully",
+      blogs: randomBlogs, // Note: this is now an array of blogs
+    });
+  } catch (err) {
+    console.error("❌ Error fetching random blogs:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching random blogs",
+      error: err.message,
+    });
+  }
+};
+
+
+
 
 
 
 
 //hbh
 module.exports = {
+  getRandomBlogs,
+  getDistinctCategoryLocation,
   getAllBlogs,
   getFeaturedJobs,
   getCompanyNameOrJobName,

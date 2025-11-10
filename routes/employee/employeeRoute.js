@@ -89,7 +89,8 @@ employeeRoute.get("/get-saved-jobs-details/:employeeId", employeeController.getS
 employeeRoute.get("/get-company-name-or-job-name", employeeController.getCompanyNameOrJobName);
 employeeRoute.get("/get-jobs-by-type/:jobType", employeeController.getFeaturedJobs);
 employeeRoute.get("/get-all-blogs", employeeController.getAllBlogs);
-
+employeeRoute.get("/get-distict-category-location", employeeController.getDistinctCategoryLocation);
+employeeRoute.get("/get-random-blogs", employeeController.getRandomBlogs);
 
 
 employeeRoute.get("/fetchallemployee", employeeController.getAllEmployees);

@@ -165,35 +165,42 @@ const createJob = async (req, res) => {
 
 const getAllJobs = async (req, res) => {
   try {
-    const { category, jobTitle, location, experience } = req.query;
+    let { category, jobTitle, location, experience } = req.query;
+    console.log("experience", experience);
+
 
     const filterConditions = {};
 
-    if (category) filterConditions.category = { $regex: category, $options: "i" };
-    if (experience) filterConditions.experience = { $regex: experience, $options: "i" };
-    
-    // Search in both location and region fields
-    if (location) {
-        filterConditions.$or = [
-            ...(filterConditions.$or || []),
-            { location: { $regex: location, $options: "i" } },
-            { region: { $regex: location, $options: "i" } }
-        ];
+    // --- CATEGORY ---
+    if (category) {
+      const words = category.split(" ").map(w => w.trim()).filter(Boolean);
+      filterConditions.category = { $regex: words.join("|"), $options: "i" };
     }
 
+    // --- JOB TITLE ---
     if (jobTitle) {
+      const words = jobTitle.split(" ").map(w => w.trim()).filter(Boolean);
       filterConditions.$or = [
-        ...(filterConditions.$or || []),
-        { jobTitle: { $regex: jobTitle, $options: "i" } },
-        { companyName: { $regex: jobTitle, $options: "i" } }
+        { jobTitle: { $regex: words.join("|"), $options: "i" } },
+        { companyName: { $regex: words.join("|"), $options: "i" } },
       ];
     }
 
-    const jobs = await Job.aggregate([
-      { $match: filterConditions },
+    // --- LOCATION / REGION ---
+    if (location) {
+      filterConditions.$or = [
+        ...(filterConditions.$or || []),
+        { location: { $regex: location, $options: "i" } },
+        { region: { $regex: location, $options: "i" } },
+      ];
+    }
 
+    // --- Fetch jobs matching filters (without experience yet) ---
+    let jobs = await Job.aggregate([
+      { $match: filterConditions },
       { $sort: { createdAt: -1 } },
 
+      // --- Convert employid to ObjectId if valid ---
       {
         $addFields: {
           employidObject: {
@@ -206,6 +213,7 @@ const getAllJobs = async (req, res) => {
         },
       },
 
+      // --- Lookup employer info ---
       {
         $lookup: {
           from: "employers",
@@ -214,14 +222,9 @@ const getAllJobs = async (req, res) => {
           as: "employerInfo",
         },
       },
+      { $unwind: { path: "$employerInfo", preserveNullAndEmptyArrays: true } },
 
-      {
-        $unwind: {
-          path: "$employerInfo",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-
+      // --- Add employer fields ---
       {
         $addFields: {
           employerProfilePic: { $ifNull: ["$employerInfo.userProfilePic", null] },
@@ -239,13 +242,36 @@ const getAllJobs = async (req, res) => {
         },
       },
 
-      {
-        $project: {
-          employidObject: 0,
-          employerInfo: 0,
-        },
-      },
+      // --- Remove intermediate fields ---
+      { $project: { employidObject: 0, employerInfo: 0 } },
     ]);
+
+    // --- EXPERIENCE NORMALIZATION ---
+    if (experience) {
+      const normalizeExperience = (exp) => {
+        if (!exp || /NA|not specified|REMOTE/i.test(exp)) return null;
+        exp = exp.trim();
+        const numbers = exp.match(/\d+/g)?.map(Number);
+
+        if (numbers && numbers.length > 0) {
+          const minExp = numbers[0];
+          if (minExp === 0) return "0-2";
+          if (minExp >= 2 && minExp < 5) return "2-5";
+          if (minExp >= 5 && minExp < 10) return "5-10";
+          if (minExp >= 10 && minExp < 15) return "10-15";
+          if (minExp >= 15) return "15+";
+        }
+
+        if (/fresher/i.test(exp)) return "Fresher";
+        if (/entry/i.test(exp)) return "Entry Level";
+        if (/mid/i.test(exp)) return "Mid Career";
+        if (/senior/i.test(exp)) return "Senior";
+
+        return null;
+      };
+
+      jobs = jobs.filter(job => normalizeExperience(job.experience) === experience);
+    }
 
     res.status(200).json(jobs);
   } catch (error) {
@@ -256,7 +282,9 @@ const getAllJobs = async (req, res) => {
 
 
 
-// GET /api/jobs/:id
+
+
+
 const getJobById = async (req, res) => {
   try {
     const jobId = req.params.id;
