@@ -600,10 +600,10 @@ const employerChangePassword = async (req, res) => {
   try {
     console.log("Welcome to user change password");
 
-    const { userMobile, password, confirmPassword } = req.body;
+    const { companyEmail, password, confirmPassword } = req.body;
 
     // Validate inputs
-    if (!userMobile || !password || !confirmPassword) {
+    if (!companyEmail || !password || !confirmPassword) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -616,7 +616,7 @@ const employerChangePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Find the user by contact number
-    const user = await userModel.findOne({ userMobile: userMobile });
+    const user = await userModel.findOne({ companyEmail: companyEmail });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
