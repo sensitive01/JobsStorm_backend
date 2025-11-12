@@ -616,7 +616,7 @@ const employerChangePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Find the user by contact number
-    const user = await userModel.findOne({ companyEmail: companyEmail });
+    const user = await userModel.findOne({ contactEmail: companyEmail });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
