@@ -1,139 +1,256 @@
-const { v2: cloudinary } = require('cloudinary');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const { v2: cloudinary } = require("cloudinary");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 
+// ==============================
+// ✅ Cloudinary Config (SECURE)
+// ==============================
 cloudinary.config({
-  cloud_name: 'dsyqzw9ft',
-  api_key: '639592464425626',
-  api_secret: '1bdQpon4QnDnkKOFCtORmyjU2c0',
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// ==============================
+// ✅ Public ID Generator (FIXED)
+// ==============================
 const generatePublicId = (req, file, prefix) => {
+  const userId = req.params.userId || req.body.employeeId || req.body.userId || uuidv4();
   const timestamp = Date.now();
-  const originalName = file.originalname.replace(/\.[^/.]+$/, "");
-  return `${req.params.employid || req.body.employeeId || req.body.employerId}_${prefix}_${originalName}_${timestamp}`;
+  const cleanName = path
+    .parse(file.originalname)
+    .name.replace(/[^a-zA-Z0-9-_]/g, "_");
+
+  return `${userId}_${prefix}_${cleanName}_${timestamp}`;
 };
 
+
+
+
+
+// ==============================
+// ✅ PROFILE IMAGE
+// ==============================
 const profileImageStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: (req, file) => ({
-    folder: 'employee_profile_images',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
-    public_id: generatePublicId(req, file, 'profile'),
-    transformation: [{ width: 500, height: 500, crop: 'limit' }],
-    resource_type: 'image',
+    folder: "employee/profile_images",
+    public_id: generatePublicId(req, file, "profile"),
+    allowed_formats: ["jpg", "jpeg", "png", "gif"],
+    resource_type: "image",
   }),
 });
 
+
+// ==============================
+// ✅ CHAT IMAGE
+// ==============================
+const chatImageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "chat/images",
+    public_id: generatePublicId(req, file, "chatimg"),
+    allowed_formats: ["jpg", "jpeg", "png", "gif"],
+    resource_type: "image",
+  }),
+});
+
+
+// ==============================
+// ✅ CHAT AUDIO
+// ==============================
+const chatAudioStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "chat/audio",
+    public_id: generatePublicId(req, file, "chataudio"),
+    allowed_formats: ["mp3", "wav", "m4a"],
+    resource_type: "video",
+  }),
+});
+
+
+// ==============================
+// ✅ SEND IMAGE (CHAT / PROFILE)
+// ==============================
 const sendimage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: 'sendimage',
-    public_id: (req, file) => {
-      const userId = req.body.employeeId || req.body.employerId || req.body.userId || uuidv4();
-      const baseName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9-_]/g, '_');
-      return `${userId}_profile_${baseName}_${Date.now()}`;
-    },
-  },
+  params: (req, file) => {
+    const userId = req.body.employeeId || req.body.userId || uuidv4();
+    const baseName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9-_]/g, "_");
+
+    return {
+      folder: "sendimage",
+      public_id: `${userId}_image_${baseName}_${Date.now()}`,
+      resource_type: "image",
+    };
+  }
 });
 
-const chatImageStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: (req, file) => ({
-    folder: 'chatimage',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
-    public_id: generatePublicId(req, file, 'chatimage'),
-    transformation: [{ width: 500, height: 500, crop: 'limit' }],
-    resource_type: 'image',
-  }),
-});
 
-const chatAudioStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: (req, file) => ({
-    folder: 'chataudio',
-    allowed_formats: ['m4a', 'mp3', 'wav'],
-    public_id: generatePublicId(req, file, 'chataudio'),
-    resource_type: 'video', // Cloudinary uses 'video' for audio files
-  }),
-});
-
+// ==============================
+// ✅ EVENT IMAGE
+// ==============================
 const eventImageStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'event_images',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
-    transformation: [{ width: 1000, height: 500, crop: 'limit' }],
-    resource_type: 'image',
+    folder: "events",
+    allowed_formats: ["jpg", "jpeg", "png", "gif"],
+    resource_type: "image",
   },
 });
 
+
+// ==============================
+// ✅ RESUME
+// ==============================
 const resumeStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: (req, file) => ({
-    folder: 'employee_resumes',
-    allowed_formats: ['pdf', 'doc', 'docx', 'txt'],
-    public_id: generatePublicId(req, file, 'resume'),
-    resource_type: 'raw',
-    format: 'pdf',
+    folder: "employee/resumes",
+    public_id: generatePublicId(req, file, "resume"),
+    allowed_formats: ["pdf", "doc", "docx"],
+    resource_type: "raw",
   }),
 });
 
+
+// ==============================
+// ✅ COVER LETTER
+// ==============================
 const coverLetterStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: (req, file) => ({
-    folder: 'employee_cover_letters',
-    allowed_formats: ['pdf', 'doc', 'docx', 'txt'],
-    public_id: generatePublicId(req, file, 'coverletter'),
-    resource_type: 'raw',
-    format: 'pdf',
+    folder: "employee/cover_letters",
+    public_id: generatePublicId(req, file, "coverletter"),
+    allowed_formats: ["pdf", "doc", "docx"],
+    resource_type: "raw",
   }),
 });
+
+
+// ==============================
+// ✅ PASSPORT
+// ==============================
+const passportStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "employee/passports",
+    public_id: generatePublicId(req, file, "passport"),
+    allowed_formats: ["jpg", "png", "pdf"],
+    resource_type: "auto",
+  }),
+});
+
+
+// ==============================
+// ✅ EDUCATION CERTIFICATE
+// ==============================
+const educationCertificateStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "employee/education_certificates",
+    public_id: generatePublicId(req, file, "edu_cert"),
+    allowed_formats: ["jpg", "png", "pdf"],
+    resource_type: "auto",
+  }),
+});
+
+
+// ==============================
+// ✅ POLICE CLEARANCE
+// ==============================
+const policeClearanceStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "employee/police_clearance",
+    public_id: generatePublicId(req, file, "police"),
+    allowed_formats: ["jpg", "png", "pdf"],
+    resource_type: "auto",
+  }),
+});
+
+
+// ==============================
+// ✅ MOFA ATTESTATION
+// ==============================
+const mofaAttestationStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req, file) => ({
+    folder: "employee/mofa_attestation",
+    public_id: generatePublicId(req, file, "mofa"),
+    allowed_formats: ["jpg", "png", "pdf"],
+    resource_type: "auto",
+  }),
+});
+
+
+// ==============================
+// ✅ PROFILE VIDEO
+// ==============================
 const profileVideoStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    resource_type: 'video', // ✅ VERY IMPORTANT
-    folder: 'profileVideos',
-    allowed_formats: ['mp4', 'mov', 'avi'],
-    public_id: (req, file) => `video-${Date.now()}-${file.originalname}`,
-  },
+  params: (req, file) => ({
+    folder: "employee/profile_videos",
+    public_id: generatePublicId(req, file, "video"),
+    allowed_formats: ["mp4", "mov", "avi"],
+    resource_type: "video",
+  }),
 });
+
+
+// ==============================
+// ✅ INTRO AUDIO
+// ==============================
 const audioStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    resource_type: 'video', // ✅ Audio is treated as 'video' in Cloudinary
-    folder: 'audioFiles',
-    allowed_formats: ['mp3', 'wav', 'm4a'],
-    public_id: (req, file) => `audio-${Date.now()}-${file.originalname}`,
-  },
+  params: (req, file) => ({
+    folder: "employee/audio",
+    public_id: generatePublicId(req, file, "audio"),
+    allowed_formats: ["mp3", "wav", "m4a"],
+    resource_type: "video",
+  }),
 });
+
+
+// ==============================
+// ✅ BUFFER UPLOADER (OPTIONAL)
+// ==============================
 const uploadImage = async (imageBuffer, folder) => {
   return new Promise((resolve, reject) => {
     cloudinary.uploader.upload_stream(
-      {
-        folder: folder, 
-        resource_type: "auto",
-      },
+      { folder, resource_type: "auto" },
       (error, result) => {
-        if (error) {
-          return reject(new Error("Cloudinary upload failed: " + error.message));
-        }
+        if (error) return reject(error);
         resolve(result.secure_url);
       }
-    ).end(imageBuffer); 
+    ).end(imageBuffer);
   });
 };
+
+
+// ==============================
+// ✅ EXPORTS
+// ==============================
 module.exports = {
   cloudinary,
   uploadImage,
-  sendimage,
-  audioStorage,
-  profileVideoStorage,
+
   profileImageStorage,
-  eventImageStorage,
-  resumeStorage,
   chatImageStorage,
   chatAudioStorage,
+  sendimage,
+  eventImageStorage,
+
+  resumeStorage,
   coverLetterStorage,
+
+  passportStorage,
+  educationCertificateStorage,
+  policeClearanceStorage,
+  mofaAttestationStorage,
+
+  profileVideoStorage,
+  audioStorage,
 };
