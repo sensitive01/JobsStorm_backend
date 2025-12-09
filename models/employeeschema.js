@@ -2,36 +2,35 @@ const mongoose = require("mongoose");
 
 // 🔹 Education Subschema
 const educationSchema = new mongoose.Schema({
-  type: { type: String },
-  degree: { type: String },
+  type: { type: String }, // e.g., "Degree", "Diploma"
+  degree: { type: String }, // e.g., "B.Sc", "B.Ed"
   institution: { type: String },
-  startDate: { type: String },
-  endDate: { type: String },
+  startDate: { type: String }, // MM/YYYY
+  endDate: { type: String }, // MM/YYYY (optional)
 });
 
 // 🔹 Work Experience Subschema
 const workExperienceSchema = new mongoose.Schema({
   position: { type: String },
   company: { type: String },
-  employmentType: { type: String },
-  startDate: { type: String },
-  endDate: { type: String },
+  employmentType: { type: String }, // "Full-time", "Part-time"
+  startDate: { type: String }, // MM/YYYY
+  endDate: { type: String }, // MM/YYYY (optional)
   description: String,
 });
 
-// 🔹 Media Subschema
+// 🔹 Media Subschema (Audio / Video / Image)
 const mediaSchema = new mongoose.Schema({
   name: String,
   url: String,
   type: { type: String, enum: ["audio", "video", "image"] },
-  duration: Number,
-  thumbnail: String,
+  duration: Number, // in seconds (for audio/video)
+  thumbnail: String, // video thumbnail
   createdAt: { type: Date, default: Date.now },
 });
 
 // 🔹 Main Employee Schema
 const employeeSchema = new mongoose.Schema({
-
   // 🧾 Identifiers
   uuid: String,
   googleId: String,
@@ -52,12 +51,8 @@ const employeeSchema = new mongoose.Schema({
   // 👤 Personal Info
   userName: String,
   gender: { type: String, enum: ["Male", "Female", "Others"] },
-  dob: String,
+  dob: String, // DD/MM/YYYY
   maritalStatus: String,
-  nationality: String,
-  passportNumber: String,
-  passportExpiryDate: Date,
-  location: String,
   languages: [String],
 
   // 📍 Address & Location
@@ -78,11 +73,11 @@ const employeeSchema = new mongoose.Schema({
   currentrole: String,
   specialization: String,
   gradeLevels: [String],
-  totalExperience: mongoose.Schema.Types.Mixed,
+  totalExperience: mongoose.Schema.Types.Mixed, // flexible format
   expectedSalary: Number,
   isAvailable: { type: Boolean, default: false },
 
-  // 🎓 Education & Work
+  // 🎓 Education & Work Experience
   education: [educationSchema],
   workExperience: [workExperienceSchema],
 
@@ -91,19 +86,21 @@ const employeeSchema = new mongoose.Schema({
   profilesummary: String,
   coverLetter: String,
 
-  // 📁 Documents
-  resume: { name: String, url: String },
-  coverLetterFile: { name: String, url: String },
-  passport: { name: String, url: String },
-  educationCertificate: { name: String, url: String },
-  policeClearance: { name: String, url: String },
-  mofaAttestation: { name: String, url: String },
+  // 📁 Uploaded Files
+  resume: {
+    name: String,
+    url: String,
+  },
+  coverLetterFile: {
+    name: String,
+    url: String,
+  },
 
-  // 🖼️ Media
+  // 🖼️ Media (Audio / Video / Image)
   audioFiles: [mediaSchema],
   videoFiles: [mediaSchema],
 
-  // 🎥 Profile Media
+  // 🎥 Profile Media (Intro)
   profileVideo: {
     name: String,
     url: String,
@@ -121,38 +118,55 @@ const employeeSchema = new mongoose.Schema({
   linkedin: String,
   portfolio: String,
 
-  // 🏅 Referral
+  // 🏅 Referral System
   referralCode: { type: String, unique: true },
   referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employer" },
   referralCount: { type: Number, default: 0 },
   referralRewards: { type: Number, default: 0 },
 
-  // 📸 Profile Image
-  userProfilePic: { name: String, url: String },
-  profileImage: String,
+  // 📸 Profile
+  userProfilePic: {
+    name: String,
+    url: String,
+  },
 
-  // 💾 Saved Jobs
+  profileImage: String,
   savedJobs: [{ type: String }],
 
-  // 🎫 SUBSCRIPTION CARD (✅ ADDED)
+  // 💳 Subscription System
   subscription: {
-    cardNumber: { type: String, unique: true },
+    planType: { 
+      type: String, 
+      enum: ["silver", "gold", "platinum"], 
+      default: "silver" 
+    },
+    startDate: Date,
+    endDate: Date,
+    status: { 
+      type: String, 
+      enum: ["active", "expired", "cancelled"], 
+      default: "expired" 
+    },
+    cardNumber: String,
     expiryMonth: String,
     expiryYear: String,
     issuedAt: Date,
-    status: { type: String, default: "active" } // active | expired | blocked
+    paymentId: String,
+    amount: Number,
+    immediateInterviewCall: { type: Boolean, default: false },
   },
 
-  // 🕓 Meta
+  // 🕓 Metadata
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
 
 // 🔹 Referral Code Generator
 employeeSchema.methods.generateReferralCode = function () {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid ambiguous chars
   let result = "";
 
+  // Use first 3 letters of userName if available
   if (this.userName) {
     result += this.userName.replace(/\s+/g, "").substring(0, 3).toUpperCase();
   } else {
@@ -161,6 +175,7 @@ employeeSchema.methods.generateReferralCode = function () {
     }
   }
 
+  // Add 5 random chars
   for (let i = 0; i < 5; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }

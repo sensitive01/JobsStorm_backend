@@ -144,15 +144,41 @@ employerRoute.get(
 );
 employerRoute.get("/fetchchat/:docId", helpcontroller.fetchChat);
 
+// ===== Chat Routes =====
+// Send message (with optional file upload)
+employerRoute.post(
+  "/sendchats",
+  memoryUpload,
+  chatController.sendMessage
+);
+
+// Get chat messages by employeeId, employerId, and jobId
+employerRoute.get("/chat/messages", chatController.getChatMessages);
+
+// Get chat messages by jobId (with optional employeeId and employerId in query)
 employerRoute.get("/chats/:jobId", chatController.getChatMessagesByJobId);
+
+// Get all chats for an employer
+employerRoute.get("/chat/employer/:employerId", chatController.getChatsByEmployerId);
+
+// Get all chats for an employee
+employerRoute.get("/chat/employee/:employeeId", chatController.getChatsByEmployeeId);
+
+// Mark messages as read
+employerRoute.post("/chat/mark-read", chatController.markAsRead);
+
+// Get unread message count
+employerRoute.get("/chat/unread-count", chatController.getUnreadCount);
+
+// Delete a chat
+employerRoute.delete("/chat/:chatId", chatController.deleteChat);
+
+// Legacy routes for backward compatibility
 employerRoute.get("/employer/:employerId", chatController.getChatsByEmployerId);
 employerRoute.get("/employee/:employeeId", chatController.getChatsByEmployeeId);
-employerRoute.get(
-  "/getchatmessagesbyemployerid",
-  chatController.getchatmessagesbyemployerid
-);
 employerRoute.get("/view", chatController.getChatMessages);
 employerRoute.get("/unread", chatController.getUnreadCount);
+employerRoute.post("/mark-read", chatController.markAsRead);
 
 employerRoute.get(
   "/getsavedcandidates/:employerId",

@@ -6,8 +6,6 @@ const userModel = require("../../models/employeeschema");
 const Employee = require("../../models/employeeschema");
 const demoModel = require("../../models/bookDemoModal");
 const Employer = require("../../models/employerSchema");
-const crypto = require("crypto");
-
 
 const generateOTP = require("../../utils/generateOTP");
 const jwtDecode = require("jwt-decode");
@@ -271,8 +269,46 @@ const applyForJob = async (req, res) => {
     const { uploadedFileUrl, coverLetter } = req.body;
     const candidateData = await Employee.findOne(
       { _id: candidateId },
-      { userName: 1 }
+      { userName: 1, subscription: 1 }
     );
+
+    if (!candidateData) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    // Check subscription status
+    const subscription = candidateData.subscription || {};
+    const now = new Date();
+    const isActive = 
+      subscription.status === "active" &&
+      subscription.endDate &&
+      new Date(subscription.endDate) > now;
+    
+    // Get plan details from database to determine features
+    const EmployeePlan = require("../../models/employeePlansSchema");
+    const plan = await EmployeePlan.findOne({ 
+      planId: subscription.planType || "silver",
+      isActive: true 
+    });
+    
+    const hasImmediateCall = 
+      isActive && 
+      plan?.features?.immediateInterviewCall === true &&
+      subscription.immediateInterviewCall;
+
+    // Determine priority based on subscription plan features
+    let priority = "normal";
+    if (isActive && plan?.features?.priorityToRecruiters) {
+      const priorityLevel = plan.features.priorityToRecruiters;
+      if (priorityLevel === "highest") {
+        priority = "highest";
+      } else if (priorityLevel === "medium") {
+        priority = "medium";
+      }
+    }
 
     const application = {
       applicantId: candidateId,
@@ -285,6 +321,10 @@ const applyForJob = async (req, res) => {
       },
       coverLetter,
       status: "Applied",
+      priority,
+      hasImmediateCall,
+      subscriptionPlan: subscription.planType || "silver",
+      appliedAt: new Date(),
     };
 
     const updatedJob = await Job.findByIdAndUpdate(
@@ -300,10 +340,24 @@ const applyForJob = async (req, res) => {
       });
     }
 
+    // Get plan name for message
+    const planName = plan?.name || subscription.planType || "Silver";
+    
+    const responseMessage = hasImmediateCall 
+      ? "Application submitted successfully! You'll get an immediate interview call."
+      : isActive && plan?.features?.priorityToRecruiters && plan.features.priorityToRecruiters !== "none"
+      ? `Application submitted successfully! You have ${plan.features.priorityToRecruiters} priority in the application pool.`
+      : "Application submitted successfully!";
+
     res.status(201).json({
       success: true,
-      message: "Application submitted successfully",
+      message: responseMessage,
       data: updatedJob.applications.slice(-1)[0],
+      subscriptionInfo: {
+        planType: subscription.planType || "silver",
+        hasImmediateCall,
+        priority,
+      },
     });
   } catch (error) {
     console.error("Error submitting application:", error);
@@ -1361,28 +1415,27 @@ const bookDemoSchedule = async (req, res) => {
 const editUserData = async (req, res) => {
   try {
     const userId = req.params.userId;
+    console.log(req.body);
+
+    // Access text fields from FormData
     const body = req.body;
 
-    const safeParse = (value, fallback = []) => {
-      try { return JSON.parse(value); } catch { return fallback; }
-    };
+    console.log("Body", body);
 
-    // Parse JSON arrays
-    const languages = safeParse(body.languages);
-    const gradeLevels = safeParse(body.gradeLevels);
-    const skills = safeParse(body.skills);
-    const education = safeParse(body.education);
-    const workExperience = safeParse(body.workExperience);
+    // Parse arrays sent as JSON strings
+    const languages = body.languages ? JSON.parse(body.languages) : [];
+    const gradeLevels = body.gradeLevels ? JSON.parse(body.gradeLevels) : [];
+    const skills = body.skills ? JSON.parse(body.skills) : [];
+    const education = body.education ? JSON.parse(body.education) : [];
+    const workExperience = body.workExperience
+      ? JSON.parse(body.workExperience)
+      : [];
 
     // Build update object
     const updateData = {
       userName: body.userName,
       gender: body.gender,
       dob: body.dob,
-      nationality: body.nationality,
-      passportNumber: body.passportNumber,
-      passportExpiryDate: body.passportExpiryDate,
-      location: body.location,
       maritalStatus: body.maritalStatus,
       languages,
       userEmail: body.userEmail,
@@ -1396,8 +1449,8 @@ const editUserData = async (req, res) => {
       preferredLocation: body.preferredLocation,
       currentrole: body.currentrole,
       specialization: body.specialization,
-      totalExperience: Number(body.totalExperience),
-      expectedSalary: Number(body.expectedSalary),
+      totalExperience: body.totalExperience,
+      expectedSalary: body.expectedSalary,
       isAvailable: body.isAvailable === "true" || body.isAvailable === true,
       gradeLevels,
       skills,
@@ -1406,38 +1459,56 @@ const editUserData = async (req, res) => {
       profilesummary: body.profilesummary,
       github: body.github,
       linkedin: body.linkedin,
-      portfolio: body.portfolio
+      portfolio: body.portfolio,
     };
 
-    // ✅ Save Cloudinary files
-    if (req.uploadedFiles) {
-      Object.assign(updateData, req.uploadedFiles);
+    // Handle uploaded files
+    if (req.files.userProfilePic) {
+      updateData.userProfilePic = {
+        name: req.files.userProfilePic[0].originalname,
+        url: `/uploads/${req.files.userProfilePic[0].filename}`,
+      };
     }
 
+    if (req.files.resume) {
+      updateData.resume = {
+        name: req.files.resume[0].originalname,
+        url: `/uploads/${req.files.resume[0].filename}`,
+      };
+    }
+
+    if (req.files.coverLetterFile) {
+      updateData.coverLetterFile = {
+        name: req.files.coverLetterFile[0].originalname,
+        url: `/uploads/${req.files.coverLetterFile[0].filename}`,
+      };
+    }
+
+    // Update employee document in MongoDB
     const updatedEmployee = await Employee.findByIdAndUpdate(
       userId,
       { $set: updateData, updatedAt: Date.now() },
       { new: true }
     );
 
-    console.log("updated data", updatedEmployee)
-
     if (!updatedEmployee) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     res.json({
       success: true,
       message: "Profile updated successfully",
-      data: updatedEmployee
+      data: updatedEmployee,
     });
-
   } catch (err) {
     console.error("Error updating user:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 };
-
 
 const getUserData = async (req, res) => {
   try {
@@ -1788,7 +1859,7 @@ const getRandomBlogs = async (req, res) => {
       { $sample: { size: 3 } }, // Fetch 3 random blogs
     ]);
 
-    console.log("randomBlogs", randomBlogs)
+    console.log("randomBlogs",randomBlogs)
 
     return res.status(200).json({
       success: true,
@@ -1808,268 +1879,11 @@ const getRandomBlogs = async (req, res) => {
 
 
 
-const geCandidateDashboardData = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-    let profileViews = 0;
-
-    // ✅ 1. SAVED JOB COUNT
-    const employee = await Employee.findById(candidateId, { savedJobs: 1 }).lean();
-    const savedJobCount = employee?.savedJobs?.length || 0;
-
-    // ✅ 2. APPLIED JOB COUNT (STRING MATCH)
-    const appliedJobCount = await Job.countDocuments({
-      "applications.applicantId": candidateId   // ✅ STRING MATCH
-    });
-
-    // ✅ 3. INTERVIEW COUNT (ACCORDING TO YOUR DB)
-    const interviewData = await Job.aggregate([
-      { $match: { "applications.applicantId": candidateId } },
-
-      {
-        $project: {
-          applications: {
-            $filter: {
-              input: "$applications",
-              as: "app",
-              cond: {
-                $and: [
-                  { $eq: ["$$app.applicantId", candidateId] },
-                  { $eq: ["$$app.status", "Interview Scheduled"] } // ✅ FIXED CASE
-                ]
-              }
-            }
-          }
-        }
-      },
-
-      { $unwind: "$applications" },
-      { $count: "count" }
-    ]);
-
-    const interviewScheduledCount = interviewData[0]?.count || 0;
-
-    // ✅ 4. RECENT APPLIED JOBS (LAST 3)
-    const recentJobs = await Job.aggregate([
-      { $match: { "applications.applicantId": candidateId } },
-
-      {
-        $project: {
-          jobTitle: 1,
-          companyName: 1,
-          location: 1,
-          jobType: 1,
-          salaryFrom: 1,
-          salaryTo: 1,
-          applications: {
-            $filter: {
-              input: "$applications",
-              as: "app",
-              cond: { $eq: ["$$app.applicantId", candidateId] }
-            }
-          }
-        }
-      },
-
-      { $unwind: "$applications" },
-
-      // ✅ SORT BY appliedDate DESC
-      { $sort: { "applications.appliedDate": -1 } },
-
-      // ✅ RETURN ONLY 3
-      { $limit: 3 },
-
-      {
-        $project: {
-          jobTitle: 1,
-          companyName: 1,
-          location: 1,
-          jobType: 1,
-
-
-          appliedDate: "$applications.appliedDate",
-          status: "$applications.status",
-          employApplicantStatus: "$applications.employApplicantStatus"
-        }
-      }
-    ]);
-
-    console.log(
-      "DASHBOARD =>",
-      savedJobCount,
-      appliedJobCount,
-      interviewScheduledCount,
-      recentJobs
-    );
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        savedJobCount,
-        appliedJobCount,
-        interviewScheduledCount,
-        profileViews,
-        recentAppliedJobs: recentJobs
-      }
-    });
-
-  } catch (err) {
-    console.error("Dashboard Error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Dashboard data error"
-    });
-  }
-};
-
-
-const generateSubscriptionCard = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-
-    // ✅ Function to generate random digits
-    const randomDigits = (length) =>
-      crypto.randomInt(0, Math.pow(10, length))
-        .toString()
-        .padStart(length, "0");
-
-    // ✅ Function to generate expiry month (+2 to Dec)
-    const getExpiryDate = () => {
-      const now = new Date();
-      const currentMonth = now.getMonth() + 1; // 1-12
-      const year = now.getFullYear();
-
-      let minMonth = currentMonth + 2;
-      if (minMonth > 12) minMonth = 12;
-
-      const expiryMonth = Math.floor(Math.random() * (12 - minMonth + 1)) + minMonth;
-
-      return {
-        expiryMonth: expiryMonth.toString().padStart(2, "0"),
-        expiryYear: year.toString()
-      };
-    };
-
-    // ✅ Generate unique card number
-    let cardNumber = null;
-    let prefix = 45;
-    let exists = true;
-
-    while (exists) {
-      const number = `${prefix}${randomDigits(10)}`; // 12-digit
-      const found = await Employee.findOne({ "subscription.cardNumber": number });
-
-      if (!found) {
-        cardNumber = number;
-        exists = false;
-      } else {
-        prefix++;
-      }
-
-      if (prefix > 99) {
-        return res.status(500).json({ message: "All prefixes exhausted!" });
-      }
-    }
-
-    const { expiryMonth, expiryYear } = getExpiryDate();
-
-    // ✅ Save in DB (assuming schema has subscription field)
-    const updated = await Employee.findByIdAndUpdate(
-      candidateId,
-      {
-        $set: {
-          subscription: {
-            cardNumber,
-            expiryMonth,
-            expiryYear,
-            issuedAt: new Date(),
-            status: "active"
-          }
-        }
-      },
-      { new: true }
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Subscription card generated successfully",
-      data: {
-        cardNumber,
-        expiryMonth,
-        expiryYear
-      }
-    });
-
-  } catch (err) {
-    console.log("error in generating the subscription card", err);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-
-const getSubscriptionCard = async (req, res) => {
-  try {
-    console.log("welcome to get card data")
-    const { candidateId } = req.params;
-
-    const employee = await Employee.findById(candidateId, {
-      subscription: 1,
-      userName: 1,
-
-
-    }).lean();
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found"
-      });
-    }
-
-    if (!employee.subscription || !employee.subscription.cardNumber) {
-      return res.status(200).json({
-        success: true,
-        message: "No subscription card generated yet",
-        data: null
-      });
-    }
-
-    const { cardNumber, expiryMonth, expiryYear, issuedAt, status } = employee.subscription;
-
-    // ✅ Mask card number (show only last 4 digits)
-    const maskedCardNumber = "********" + cardNumber.slice(-4);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        cardHolderName: employee.userName,
-
-        cardNumber: maskedCardNumber,
-        fullCardNumber: cardNumber,
-        expiryMonth,
-        expiryYear,
-        issuedAt,
-        status
-      }
-    });
-
-  } catch (error) {
-    console.error("Error fetching subscription:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error fetching subscription data"
-    });
-  }
-};
-
 
 
 
 //hbh
 module.exports = {
-  getSubscriptionCard,
-  generateSubscriptionCard,
-  geCandidateDashboardData,
   getRandomBlogs,
   getDistinctCategoryLocation,
   getAllBlogs,
