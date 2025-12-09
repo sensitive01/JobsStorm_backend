@@ -54,6 +54,8 @@ exports.getSubscriptionStatus = async (req, res) => {
  */
 exports.createSubscription = async (req, res) => {
   try {
+    console.log("📥 Received subscription create request:", req.body);
+    
     const {
       employeeId,
       planType,
@@ -62,6 +64,7 @@ exports.createSubscription = async (req, res) => {
     } = req.body;
 
     if (!employeeId || !planType || !paymentId) {
+      console.log("❌ Missing required fields:", { employeeId, planType, paymentId });
       return res.status(400).json({
         success: false,
         message: "Missing required fields: employeeId, planType, paymentId",
@@ -69,32 +72,39 @@ exports.createSubscription = async (req, res) => {
     }
 
     // Validate plan type against available plans in database
+    console.log("🔍 Checking plan type:", planType);
     const availablePlan = await EmployeePlan.findOne({ planId: planType, isActive: true });
     if (!availablePlan) {
       const allPlans = await EmployeePlan.find({ isActive: true });
       const availablePlanIds = allPlans.map((p) => p.planId);
+      console.log("❌ Plan not found. Available plans:", availablePlanIds);
       return res.status(400).json({
         success: false,
         message: `Invalid plan type. Must be one of: ${availablePlanIds.join(", ")}`,
       });
     }
+    console.log("✅ Plan found:", availablePlan.name);
     
     // Only allow paid plans (not silver/free)
     if (planType === "silver") {
+      console.log("❌ Silver plan is free");
       return res.status(400).json({
         success: false,
         message: "Silver plan is free and does not require payment",
       });
     }
 
+    console.log("🔍 Finding employee:", employeeId);
     const employee = await Employee.findById(employeeId);
 
     if (!employee) {
+      console.log("❌ Employee not found:", employeeId);
       return res.status(404).json({
         success: false,
         message: "Employee not found",
       });
     }
+    console.log("✅ Employee found:", employee.userName);
 
     // Get plan details from database
     const plan = await EmployeePlan.findOne({ planId: planType, isActive: true });
@@ -139,6 +149,7 @@ exports.createSubscription = async (req, res) => {
     };
 
     await employee.save();
+    console.log("✅ Subscription saved for employee:", employee.userName);
 
     // Generate subscription card and send email
     try {
@@ -148,6 +159,7 @@ exports.createSubscription = async (req, res) => {
       // Continue even if card generation fails
     }
 
+    console.log("✅ Subscription created successfully");
     return res.status(200).json({
       success: true,
       message: "Subscription created successfully",

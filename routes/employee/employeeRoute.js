@@ -11,6 +11,7 @@ const feedbackController = require("../../controller/employeeController/feedback
 const emailverifycontroller = require("../../controller/employerController/emailverfycontoller");
 const subscriptionController = require("../../controller/employeeController/subscriptionController");
 const pricingPlanController = require("../../controller/employeeController/pricingPlanController");
+const orderController = require("../../controller/employeeController/orderController");
 
 // ===============================
 // Cloudinary Storage Config
@@ -143,6 +144,22 @@ employeeRoute.get(
 employeeRoute.post(
   "/subscription/create",
   subscriptionController.createSubscription
+);
+
+// ====================================================
+// 🔹 Order & Payment Routes
+// ====================================================
+employeeRoute.post(
+  "/order/create",
+  orderController.createOrder
+);
+employeeRoute.post(
+  "/order/verify",
+  orderController.verifyPayment
+);
+employeeRoute.get(
+  "/order/history/:employeeId",
+  orderController.getEmployeeOrders
 );
 
 // ====================================================
