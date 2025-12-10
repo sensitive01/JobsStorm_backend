@@ -157,16 +157,19 @@ exports.verifyPayment = async (req, res) => {
   const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.body;
   console.log('📥 Verifying PayU payment:', { txnid, status, employeeId, planType });
 
-  if (!txnid || !status || !hash || !employeeId || !planType) {
+  if (!txnid || !status || !employeeId || !planType) {
     return res.status(400).json({
       success: false,
-      error: 'txnid, status, hash, employeeId, and planType are required',
+      error: 'txnid, status, employeeId, and planType are required',
     });
   }
+  
+  // Hash is optional but recommended for security
+  const paymentHash = hash || '';
 
   try {
     // Verify hash if provided (recommended for security)
-    if (hash) {
+    if (paymentHash) {
       const hashParams = {
         key: PAYU_MERCHANT_KEY,
         txnid: txnid,
@@ -182,7 +185,7 @@ exports.verifyPayment = async (req, res) => {
         udf5: '',
       };
 
-      if (!verifyPayUHash(hashParams, hash)) {
+      if (!verifyPayUHash(hashParams, paymentHash)) {
         console.log('❌ Invalid PayU hash');
         // Still proceed if status is success, but log the warning
         if (status !== 'success') {
