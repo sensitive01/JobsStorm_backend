@@ -298,9 +298,19 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Calculate validity period
-    const startDate = new Date();
+    const now = new Date();
     const validityMonths = plan.validityMonths;
-    const endDate = new Date();
+
+    // If user already has an active subscription, extend from existing endDate; otherwise start from today
+    let startDate = now;
+    if (employee.subscription?.status === "active" && employee.subscription.endDate) {
+      const currentEnd = new Date(employee.subscription.endDate);
+      if (currentEnd > now) {
+        startDate = currentEnd;
+      }
+    }
+
+    const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + validityMonths);
     const finalAmount = parseFloat(amount || order.amount);
 
