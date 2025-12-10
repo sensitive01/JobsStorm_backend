@@ -8,7 +8,8 @@ const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '25UP9m';
 const PAYU_SALT = process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR';
 const PAYU_CLIENT_KEY = process.env.PAYU_CLIENT_KEY || 'f8c5c5dd367c0f9b37aa8d4eeca161d5da0d935b7ee354288c8e73daffc101a9';
 const PAYU_CLIENT_SECRET = process.env.PAYU_CLIENT_SECRET || 'd96786e86282837050c2e882053ebef929f06f58e1e1256a53e2c33724294926';
-const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://secure.payu.in'; // Use https://test.payu.in for testing
+// Default to PayU test environment if env not set
+const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://test.payu.in'; // set to https://secure.payu.in in production
 
 /**
  * Generate PayU payment hash
@@ -60,12 +61,13 @@ exports.createOrder = async (req, res) => {
     // Generate unique transaction ID
     const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
     const productInfo = `${planType} Subscription`;
-    const amountInPaise = Math.round(parseFloat(amount) * 100);
+    const amountNumber = Number(amount);
+    const amountFormatted = amountNumber.toFixed(2); // PayU expects 2-decimal format
     
     // Create order in database
     const newOrder = new Order({
       orderId: txnid,
-      amount: parseFloat(amount),
+      amount: amountNumber,
       currency: 'INR',
       status: 'created',
       employeeId,
@@ -80,7 +82,7 @@ exports.createOrder = async (req, res) => {
     const hashParams = {
       key: PAYU_MERCHANT_KEY,
       txnid: txnid,
-      amount: amount.toString(),
+      amount: amountFormatted,
       productinfo: productInfo,
       firstname: firstName || 'Customer',
       email: email || '',
@@ -93,14 +95,14 @@ exports.createOrder = async (req, res) => {
       success: true, 
       order: {
         id: txnid,
-        amount: amount.toString(),
+        amount: amountFormatted,
         currency: 'INR',
         productInfo: productInfo,
       },
       paymentData: {
         key: PAYU_MERCHANT_KEY,
         txnid: txnid,
-        amount: amount.toString(),
+        amount: amountFormatted,
         productinfo: productInfo,
         firstname: firstName || 'Customer',
         email: email || '',
@@ -109,6 +111,7 @@ exports.createOrder = async (req, res) => {
         furl: `${process.env.BASE_URL || 'http://localhost:3000'}/employee/order/failure`,
         hash: hash,
         service_provider: 'payu_paisa',
+        payuBaseUrl: PAYU_BASE_URL, // pass base URL so frontend form action matches env
       },
     });
   } catch (error) {
