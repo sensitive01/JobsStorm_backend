@@ -111,6 +111,7 @@ exports.createOrder = async (req, res) => {
         // Backend URL (for surl/furl)
         // This must match the route you defined in your backend router
         const backendUrl = process.env.BACKEND_URL;
+        console.log('Backend URL:', backendUrl);
 
         res.status(200).json({
             success: true,
