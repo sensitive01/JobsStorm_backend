@@ -9,6 +9,7 @@ const mainadminRoute = require("./routes/mainadmin/mainadmin.js");
 const employeradminRoute = require("./routes/admin/employeradminRoute.js");
 const Employer = require("./models/employerSchema.js");
 const Employee = require("./models/employeeschema.js");
+const paymentRoute = require("./routes/paymentRoute/paymentRoute.js")
 const app = express();
 const { PORT } = require("./config/variables.js");
 const cron = require('node-cron');
@@ -44,6 +45,7 @@ app.use("/", employeeRoute);
 app.use("/employer", employerRoute);
 app.use("/employeradmin", employeradminRoute);
 app.use("/admin", mainadminRoute);
+app.use("/payment", paymentRoute);
 // 404 Route Handling
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
