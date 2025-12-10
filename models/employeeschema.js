@@ -155,6 +155,8 @@ const employeeSchema = new mongoose.Schema({
     amount: Number,
     immediateInterviewCall: { type: Boolean, default: false },
   },
+  // Quick flag for active subscription
+  subscriptionActive: { type: Boolean, default: false },
 
   // 🕓 Metadata
   createdAt: { type: Date, default: Date.now },

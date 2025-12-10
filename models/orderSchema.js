@@ -20,6 +20,9 @@ const orderSchema = new mongoose.Schema({
     default: 'employee_subscription',
   },
   paymentId: String,
+  // Subscription validity (for convenience/history)
+  subscriptionStart: Date,
+  subscriptionEnd: Date,
   // Payment details
   paymentMethod: String, // e.g., 'netbanking', 'card', 'upi', 'wallet'
   paymentResponse: {

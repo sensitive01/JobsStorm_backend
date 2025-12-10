@@ -269,6 +269,9 @@ exports.verifyPayment = async (req, res) => {
       email: email || '',
       verifiedAt: new Date(),
     };
+    // Store validity on the order for history display
+    order.subscriptionStart = startDate;
+    order.subscriptionEnd = endDate;
     // Extract payment method from PayU response if available
     if (req.body.payment_source) {
       order.paymentMethod = req.body.payment_source;
@@ -363,6 +366,7 @@ exports.verifyPayment = async (req, res) => {
       amount: finalAmount,
       immediateInterviewCall: plan.features?.immediateInterviewCall || false,
     };
+    employee.subscriptionActive = true;
 
     await employee.save();
     console.log('✅ Subscription activated successfully');
@@ -404,7 +408,7 @@ exports.getEmployeeOrders = async (req, res) => {
 
     const orders = await Order.find({ employeeId })
       .sort({ createdAt: -1 })
-      .select('orderId paymentId amount currency status planType paymentMethod errorMessage verifiedAt createdAt paymentResponse');
+      .select('orderId paymentId amount currency status planType paymentMethod errorMessage verifiedAt createdAt paymentResponse subscriptionStart subscriptionEnd');
 
     return res.status(200).json({
       success: true,
