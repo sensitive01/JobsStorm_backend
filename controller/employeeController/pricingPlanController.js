@@ -21,7 +21,15 @@ exports.getPricingPlans = async (req, res) => {
       validity: plan.validity,
       validityMonths: plan.validityMonths,
       color: plan.color,
+      billingType: plan.billingType || 'one-time',
+      interviewCount: plan.interviewCount,
+      documentVerificationLevel: plan.documentVerificationLevel,
+      eProfileType: plan.eProfileType,
+      profileVisibility: plan.profileVisibility,
+      accountSupport: plan.accountSupport,
+      featuresList: plan.featuresList || [],
       features: plan.features,
+      isCustom: plan.planId === 'special', // Special plan is custom pricing
     }));
 
     return res.status(200).json({

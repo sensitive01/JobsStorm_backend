@@ -5,7 +5,7 @@ const employeePlanSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    enum: ["silver", "gold", "platinum"]
+    enum: ["starter", "premium", "special", "silver", "gold", "platinum"] // Support both old and new plans
   },
   name: {
     type: String,
@@ -51,6 +51,43 @@ const employeePlanSchema = new mongoose.Schema({
     type: String,
     default: "#9E9E9E"
   },
+  // Billing information
+  billingType: {
+    type: String,
+    enum: ["one-time", "monthly", "yearly"],
+    default: "one-time"
+  },
+  // Interview and document features
+  interviewCount: {
+    type: String, // e.g., "3-4", "8-10", "custom"
+    default: null
+  },
+  documentVerificationLevel: {
+    type: String,
+    enum: ["standard", "advanced", "tailored"],
+    default: "standard"
+  },
+  eProfileType: {
+    type: String,
+    enum: ["standard", "premium-verified", "personalized"],
+    default: "standard"
+  },
+  profileVisibility: {
+    type: String,
+    enum: ["standard", "priority", "highest"],
+    default: "standard"
+  },
+  accountSupport: {
+    type: String,
+    enum: ["standard", "premium", "dedicated"],
+    default: "standard"
+  },
+  // Features list for display
+  featuresList: [{
+    text: { type: String, required: true },
+    included: { type: Boolean, default: true }
+  }],
+  // Legacy features (for backward compatibility)
   features: {
     applyToJobs: { type: Boolean, default: true },
     priorityToRecruiters: { 
