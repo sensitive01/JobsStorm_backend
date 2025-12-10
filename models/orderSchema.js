@@ -9,17 +9,24 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['created', 'paid', 'failed'],
+    enum: ['created', 'paid', 'failed', 'cancelled'],
     default: 'created',
   },
   employerid: String, // legacy
   employeeId: String, // for employee subscriptions
-  planType: String, // e.g., silver/gold/platinum
+  planType: String, // e.g., silver/gold/platinum/starter/premium/special
   type: {
     type: String,
     default: 'employee_subscription',
   },
   paymentId: String,
+  // Payment details
+  paymentMethod: String, // e.g., 'netbanking', 'card', 'upi', 'wallet'
+  paymentResponse: {
+    type: mongoose.Schema.Types.Mixed, // Store full PayU response
+  },
+  errorMessage: String, // Store error message if payment fails
+  verifiedAt: Date, // When payment was verified
   createdAt: {
     type: Date,
     default: Date.now,

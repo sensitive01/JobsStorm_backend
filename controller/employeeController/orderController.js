@@ -200,16 +200,7 @@ exports.verifyPayment = async (req, res) => {
       }
     }
 
-    // Check payment status
-    if (status !== 'success') {
-      console.log('❌ Payment not successful:', status);
-      return res.status(400).json({
-        success: false,
-        error: 'Payment not successful',
-      });
-    }
-
-    // Update order status
+    // Find order first (needed for both success and failure cases)
     const order = await Order.findOne({ orderId: txnid });
     if (!order) {
       return res.status(404).json({
@@ -218,6 +209,42 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
+    // Check payment status
+    if (status !== 'success') {
+      console.log('❌ Payment not successful:', status);
+      
+      // Determine order status based on payment status
+      let orderStatus = 'failed';
+      if (status === 'cancelled') {
+        orderStatus = 'cancelled';
+      }
+      
+      // Update order status and store payment details
+      order.status = orderStatus;
+      order.paymentResponse = {
+        status: status,
+        txnid: txnid,
+        amount: amount || order.amount,
+        productinfo: productinfo || '',
+        firstname: firstname || '',
+        email: email || '',
+        error: req.body.error || req.body.error_Message || (status === 'cancelled' ? 'Payment cancelled by user' : 'Payment failed'),
+        verifiedAt: new Date(),
+      };
+      order.errorMessage = req.body.error || req.body.error_Message || (status === 'cancelled' ? 'Payment cancelled by user' : 'Payment not successful');
+      order.verifiedAt = new Date();
+      await order.save();
+      console.log(`📝 Order status updated to ${orderStatus}:`, txnid);
+      
+      return res.status(400).json({
+        success: false,
+        error: status === 'cancelled' ? 'Payment cancelled' : 'Payment not successful',
+        orderId: txnid,
+        status: orderStatus,
+      });
+    }
+
+    // Check if already paid
     if (order.status === 'paid') {
       return res.status(200).json({
         success: true,
@@ -229,9 +256,27 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
+    // Update order status to paid and store payment details
     order.status = 'paid';
     order.paymentId = txnid;
+    order.verifiedAt = new Date();
+    order.paymentResponse = {
+      status: status,
+      txnid: txnid,
+      amount: amount || order.amount,
+      productinfo: productinfo || '',
+      firstname: firstname || '',
+      email: email || '',
+      verifiedAt: new Date(),
+    };
+    // Extract payment method from PayU response if available
+    if (req.body.payment_source) {
+      order.paymentMethod = req.body.payment_source;
+    } else if (req.body.mode) {
+      order.paymentMethod = req.body.mode;
+    }
     await order.save();
+    console.log('📝 Order status updated to paid:', txnid);
 
     // Activate subscription
     const subscriptionController = require('./subscriptionController');
@@ -349,7 +394,7 @@ exports.getEmployeeOrders = async (req, res) => {
 
     const orders = await Order.find({ employeeId })
       .sort({ createdAt: -1 })
-      .select('orderId paymentId amount currency status planType createdAt');
+      .select('orderId paymentId amount currency status planType paymentMethod errorMessage verifiedAt createdAt paymentResponse');
 
     return res.status(200).json({
       success: true,
