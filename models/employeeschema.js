@@ -137,7 +137,7 @@ const employeeSchema = new mongoose.Schema({
   subscription: {
     planType: { 
       type: String, 
-      enum: ["silver", "gold", "platinum"], 
+      enum: ["silver", "gold", "platinum", "starter", "premium", "special"], 
       default: "silver" 
     },
     startDate: Date,
