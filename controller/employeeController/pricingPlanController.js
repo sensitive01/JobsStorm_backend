@@ -49,62 +49,82 @@ exports.getPricingPlans = async (req, res) => {
 /**
  * Get comparison table data from database
  * GET /employee/pricing-plans/comparison
+ * Note: Comparison table is now optional since features are shown in plan cards
  */
 exports.getComparisonTable = async (req, res) => {
   try {
     const plans = await EmployeePlan.find({ isActive: true }).sort({ price: 1 });
     
-    // Build comparison table from database plans
-    const features = [
-      {
-        name: "Apply to jobs",
-        silver: plans.find(p => p.planId === "silver")?.features?.applyToJobs ? "✓" : "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.applyToJobs ? "✓" : "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.applyToJobs ? "✓" : "-",
-      },
-      {
-        name: "Priority to recruiters",
-        silver: plans.find(p => p.planId === "silver")?.features?.priorityToRecruiters === "none" ? "-" : plans.find(p => p.planId === "silver")?.features?.priorityToRecruiters || "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.priorityToRecruiters === "none" ? "-" : plans.find(p => p.planId === "gold")?.features?.priorityToRecruiters || "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.priorityToRecruiters === "none" ? "-" : plans.find(p => p.planId === "platinum")?.features?.priorityToRecruiters || "-",
-      },
-      {
-        name: "Immediate interview call",
-        silver: plans.find(p => p.planId === "silver")?.features?.immediateInterviewCall ? "Yes" : "No",
-        gold: plans.find(p => p.planId === "gold")?.features?.immediateInterviewCall ? "Yes" : "No (priority pass)",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.immediateInterviewCall ? "Yes" : "No",
-      },
-      {
-        name: "Profile boosted in listings",
-        silver: plans.find(p => p.planId === "silver")?.features?.profileBoosted ? "Yes" : "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.profileBoosted ? "Yes" : "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.profileBoosted ? "Yes (top)" : "-",
-      },
-      {
-        name: "Dedicated account manager",
-        silver: plans.find(p => p.planId === "silver")?.features?.dedicatedAccountManager ? "Yes" : "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.dedicatedAccountManager ? "Yes" : "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.dedicatedAccountManager ? "Yes" : "-",
-      },
-      {
-        name: "Subscription validity",
-        silver: plans.find(p => p.planId === "silver")?.validity || "-",
-        gold: plans.find(p => p.planId === "gold")?.validity || "-",
-        platinum: plans.find(p => p.planId === "platinum")?.validity || "-",
-      },
-      {
-        name: "Resume review & optimization",
-        silver: plans.find(p => p.planId === "silver")?.features?.resumeReview > 0 ? `${plans.find(p => p.planId === "silver")?.features?.resumeReview} review` : "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.resumeReview > 0 ? `${plans.find(p => p.planId === "gold")?.features?.resumeReview} review` : "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.resumeReview > 0 ? `${plans.find(p => p.planId === "platinum")?.features?.resumeReview} reviews` : "-",
-      },
-      {
-        name: "Email & SMS confirmation",
-        silver: plans.find(p => p.planId === "silver")?.features?.emailSmsConfirmation ? "✓" : "-",
-        gold: plans.find(p => p.planId === "gold")?.features?.emailSmsConfirmation ? (plans.find(p => p.planId === "gold")?.features?.subscriptionCard ? "✓ + subscription card" : "✓") : "-",
-        platinum: plans.find(p => p.planId === "platinum")?.features?.emailSmsConfirmation ? (plans.find(p => p.planId === "platinum")?.features?.subscriptionCard ? "✓ + subscription card" : "✓") : "-",
-      },
-    ];
+    // Build comparison table from database plans (using new plan IDs)
+    const starterPlan = plans.find(p => p.planId === "starter");
+    const premiumPlan = plans.find(p => p.planId === "premium");
+    const specialPlan = plans.find(p => p.planId === "special");
+    
+    // Build features comparison based on featuresList if available, otherwise use legacy features
+    const features = [];
+    
+    // If plans have featuresList, use that
+    if (starterPlan?.featuresList?.length > 0 || premiumPlan?.featuresList?.length > 0) {
+      // Get all unique features from all plans
+      const allFeatures = new Set();
+      [starterPlan, premiumPlan, specialPlan].forEach(plan => {
+        if (plan?.featuresList) {
+          plan.featuresList.forEach(f => {
+            if (f.text) allFeatures.add(f.text);
+          });
+        }
+      });
+      
+      // Build comparison for each feature
+      allFeatures.forEach(featureText => {
+        features.push({
+          name: featureText,
+          starter: starterPlan?.featuresList?.find(f => f.text === featureText)?.included ? "✓" : "-",
+          premium: premiumPlan?.featuresList?.find(f => f.text === featureText)?.included ? "✓" : "-",
+          special: specialPlan?.featuresList?.find(f => f.text === featureText)?.included ? "✓" : "-",
+        });
+      });
+    } else {
+      // Fallback to legacy features structure
+      features.push(
+        {
+          name: "Subscription validity",
+          starter: starterPlan?.validity || "-",
+          premium: premiumPlan?.validity || "-",
+          special: specialPlan?.validity || "-",
+        },
+        {
+          name: "Interview count",
+          starter: starterPlan?.interviewCount || "-",
+          premium: premiumPlan?.interviewCount || "-",
+          special: specialPlan?.interviewCount || "-",
+        },
+        {
+          name: "Document verification",
+          starter: starterPlan?.documentVerificationLevel || "-",
+          premium: premiumPlan?.documentVerificationLevel || "-",
+          special: specialPlan?.documentVerificationLevel || "-",
+        },
+        {
+          name: "e-Profile type",
+          starter: starterPlan?.eProfileType || "-",
+          premium: premiumPlan?.eProfileType || "-",
+          special: specialPlan?.eProfileType || "-",
+        },
+        {
+          name: "Profile visibility",
+          starter: starterPlan?.profileVisibility || "-",
+          premium: premiumPlan?.profileVisibility || "-",
+          special: specialPlan?.profileVisibility || "-",
+        },
+        {
+          name: "Account support",
+          starter: starterPlan?.accountSupport || "-",
+          premium: premiumPlan?.accountSupport || "-",
+          special: specialPlan?.accountSupport || "-",
+        }
+      );
+    }
 
     return res.status(200).json({
       success: true,
@@ -119,4 +139,5 @@ exports.getComparisonTable = async (req, res) => {
     });
   }
 };
+
 
