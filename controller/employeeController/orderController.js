@@ -276,14 +276,14 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Calculate validity period
-    const now = new Date();
+    const currentDate = new Date();
     const validityMonths = plan.validityMonths;
 
     // If user already has an active subscription, extend from existing endDate; otherwise start from today
-    let startDate = now;
+    let startDate = currentDate;
     if (employee.subscription?.status === "active" && employee.subscription.endDate) {
       const currentEnd = new Date(employee.subscription.endDate);
-      if (currentEnd > now) {
+      if (currentEnd > currentDate) {
         startDate = currentEnd;
       }
     }
@@ -317,56 +317,77 @@ exports.verifyPayment = async (req, res) => {
     await order.save();
     console.log('📝 Order status updated to paid:', txnid);
 
-    // Generate unique card number
+    // Generate unique card number automatically
+    // Format: 45 + 10 random digits = 12 digits total
     const generateUniqueCardNumber = async () => {
-      const randomDigits = (length) =>
-        crypto.randomInt(0, Math.pow(10, length))
-          .toString()
-          .padStart(length, "0");
+      const randomDigits = (length) => {
+        const min = Math.pow(10, length - 1);
+        const max = Math.pow(10, length) - 1;
+        return crypto.randomInt(min, max + 1).toString();
+      };
 
       let cardNumber = null;
       let prefix = 45;
       let exists = true;
       let attempts = 0;
+      const maxAttempts = 200; // Increased attempts for better reliability
 
-      while (exists && attempts < 100) {
-        const number = `${prefix}${randomDigits(10)}`;
+      while (exists && attempts < maxAttempts) {
+        // Generate: prefix (45) + 10 random digits = 12 digit card number
+        const randomPart = randomDigits(10);
+        const number = `${prefix}${randomPart}`;
+        
+        // Check if this card number already exists
         const found = await Employee.findOne({ "subscription.cardNumber": number });
         if (!found) {
           cardNumber = number;
           exists = false;
+          console.log(`✅ Generated unique card number: ${cardNumber} (attempt ${attempts + 1})`);
         } else {
-          prefix++;
+          // If exists, try with incremented prefix or new random part
+          if (attempts % 10 === 0) {
+            prefix++;
+          }
         }
         attempts++;
       }
 
       if (!cardNumber) {
-        throw new Error("Failed to generate unique card number");
+        console.error('❌ Failed to generate unique card number after', maxAttempts, 'attempts');
+        throw new Error("Failed to generate unique card number. Please try again.");
       }
 
       return cardNumber;
     };
 
     const cardNumber = await generateUniqueCardNumber();
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 12);
+    
+    // Calculate expiry month and year automatically based on subscription end date
+    // The card expires when the subscription ends
+    const expiryMonth = (endDate.getMonth() + 1).toString().padStart(2, "0"); // +1 because getMonth() returns 0-11
+    const expiryYear = endDate.getFullYear().toString();
 
+    // Check if subscription end date is in the future (not expired)
+    const checkDate = new Date();
+    const isNotExpired = endDate > checkDate;
+    
     // Update subscription
     employee.subscription = {
       planType,
       startDate,
       endDate,
-      status: "active",
+      status: isNotExpired ? "active" : "expired",
       cardNumber,
-      expiryMonth: expiryDate.getMonth().toString().padStart(2, "0"),
-      expiryYear: expiryDate.getFullYear().toString(),
+      expiryMonth: expiryMonth, // Automatically calculated from endDate
+      expiryYear: expiryYear, // Automatically calculated from endDate
       issuedAt: startDate,
       paymentId: txnid,
       amount: finalAmount,
       immediateInterviewCall: plan.features?.immediateInterviewCall || false,
     };
-    employee.subscriptionActive = true;
+    
+    // Only set subscriptionActive to true if subscription is active AND not expired
+    employee.subscriptionActive = isNotExpired && employee.subscription.status === "active";
 
     await employee.save();
     console.log('✅ Subscription activated successfully');

@@ -8,6 +8,7 @@ const employerRoute = require("./routes/employer/employerRoute.js");
 const mainadminRoute = require("./routes/mainadmin/mainadmin.js");
 const employeradminRoute = require("./routes/admin/employeradminRoute.js");
 const Employer = require("./models/employerSchema.js");
+const Employee = require("./models/employeeschema.js");
 const app = express();
 const { PORT } = require("./config/variables.js");
 const cron = require('node-cron');
@@ -104,7 +105,49 @@ cron.schedule("59 23 * * *", async () => {
 }, {
   timezone: "Asia/Kolkata" // Set timezone to IST
 });
-console.log('Cron job scheduled.'); // To confirm that the job is scheduled
+
+// Daily check for employee subscription expiration
+cron.schedule("59 23 * * *", async () => {
+  console.log("⏰ Running daily employee subscription check...");
+
+  try {
+    const today = new Date();
+
+    // Find employees with active subscriptions that may have expired
+    const employeesWithSubscriptions = await Employee.find({
+      'subscription.status': 'active',
+      'subscription.endDate': { $exists: true }
+    });
+
+    let expiredCount = 0;
+    for (const employee of employeesWithSubscriptions) {
+      const endDate = new Date(employee.subscription.endDate);
+      
+      // If subscription has expired, update status and subscriptionActive
+      if (endDate <= today) {
+        employee.subscription.status = 'expired';
+        employee.subscriptionActive = false;
+        await employee.save();
+        expiredCount++;
+        console.log(`🚫 Subscription expired for employee: ${employee.userName || employee._id}`);
+      } else {
+        // Ensure subscriptionActive is true if subscription is still active
+        if (!employee.subscriptionActive) {
+          employee.subscriptionActive = true;
+          await employee.save();
+        }
+      }
+    }
+
+    console.log(`✅ Daily employee subscription check completed. ${expiredCount} subscriptions expired.`);
+  } catch (error) {
+    console.error("❌ Error in employee subscription cron job:", error);
+  }
+}, {
+  timezone: "Asia/Kolkata" // Set timezone to IST
+});
+
+console.log('Cron jobs scheduled.'); // To confirm that the jobs are scheduled
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {
