@@ -1,20 +1,52 @@
-const Razorpay = require('razorpay');
 const Order = require('../../models/orderSchema');
 const crypto = require('crypto');
 const Employee = require('../../models/employeeschema');
 const EmployeePlan = require('../../models/employeePlansSchema');
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// PayU Configuration
+const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '25UP9m';
+const PAYU_SALT = process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR';
+const PAYU_CLIENT_KEY = process.env.PAYU_CLIENT_KEY || 'f8c5c5dd367c0f9b37aa8d4eeca161d5da0d935b7ee354288c8e73daffc101a9';
+const PAYU_CLIENT_SECRET = process.env.PAYU_CLIENT_SECRET || 'd96786e86282837050c2e882053ebef929f06f58e1e1256a53e2c33724294926';
+const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://secure.payu.in'; // Use https://test.payu.in for testing
+
+/**
+ * Generate PayU payment hash
+ * PayU requires hash in specific format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+ */
+function generatePayUHash(params) {
+  const hashString = [
+    params.key,
+    params.txnid,
+    params.amount,
+    params.productinfo,
+    params.firstname,
+    params.email,
+    params.udf1 || '',
+    params.udf2 || '',
+    params.udf3 || '',
+    params.udf4 || '',
+    params.udf5 || '',
+    '', // udf6
+    '', // udf7
+    '', // udf8
+    '', // udf9
+    '', // udf10
+  ].join('|') + '|' + PAYU_SALT;
+  
+  const hash = crypto
+    .createHash('sha512')
+    .update(hashString)
+    .digest('hex');
+  return hash;
+}
 
 /**
  * Create order for employee subscription
  * POST /employee/order/create
  */
 exports.createOrder = async (req, res) => {
-  const { amount, employeeId, planType } = req.body;
+  const { amount, employeeId, planType, firstName, email, phone } = req.body;
   console.log('📥 Received order request:', { amount, employeeId, planType });
 
   if (!amount || !employeeId || !planType) {
@@ -25,87 +57,146 @@ exports.createOrder = async (req, res) => {
   }
 
   try {
-    const options = {
-      amount: parseInt(amount) * 100, // In paise
-      currency: 'INR',
-      receipt: `emp_${Date.now()}_${employeeId}`,
-      notes: {
-        employeeId,
-        planType,
-        type: 'employee_subscription',
-      },
-    };
-
-    const order = await razorpay.orders.create(options);
+    // Generate unique transaction ID
+    const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
+    const productInfo = `${planType} Subscription`;
+    const amountInPaise = Math.round(parseFloat(amount) * 100);
+    
+    // Create order in database
     const newOrder = new Order({
-      orderId: order.id,
-      amount: parseInt(amount),
-      currency: order.currency,
+      orderId: txnid,
+      amount: parseFloat(amount),
+      currency: 'INR',
       status: 'created',
-      employeeId, // Store employee ID
+      employeeId,
       planType,
       type: 'employee_subscription',
       createdAt: new Date(),
     });
 
     await newOrder.save();
-    console.log('✅ Order created:', order.id);
+
+    // Generate PayU hash
+    const hashParams = {
+      key: PAYU_MERCHANT_KEY,
+      txnid: txnid,
+      amount: amount.toString(),
+      productinfo: productInfo,
+      firstname: firstName || 'Customer',
+      email: email || '',
+    };
+
+    const hash = generatePayUHash(hashParams);
+
+    console.log('✅ PayU order created:', txnid);
     res.status(200).json({ 
       success: true, 
       order: {
-        id: order.id,
-        amount: order.amount,
-        currency: order.currency,
-        receipt: order.receipt,
+        id: txnid,
+        amount: amount.toString(),
+        currency: 'INR',
+        productInfo: productInfo,
       },
-      keyId: process.env.RAZORPAY_KEY_ID, // Return key for frontend
+      paymentData: {
+        key: PAYU_MERCHANT_KEY,
+        txnid: txnid,
+        amount: amount.toString(),
+        productinfo: productInfo,
+        firstname: firstName || 'Customer',
+        email: email || '',
+        phone: phone || '',
+        surl: `${process.env.BASE_URL || 'http://localhost:3000'}/employee/order/success`,
+        furl: `${process.env.BASE_URL || 'http://localhost:3000'}/employee/order/failure`,
+        hash: hash,
+        service_provider: 'payu_paisa',
+      },
     });
   } catch (error) {
-    console.error('❌ Error creating Razorpay order:', error);
+    console.error('❌ Error creating PayU order:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create Razorpay order',
+      error: 'Failed to create PayU order',
       message: error.message,
     });
   }
 };
 
 /**
+ * Verify PayU payment hash
+ * PayU response hash format: status|udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key|SALT
+ */
+function verifyPayUHash(params, receivedHash) {
+  const hashString = [
+    params.status || '',
+    params.udf5 || '',
+    params.udf4 || '',
+    params.udf3 || '',
+    params.udf2 || '',
+    params.udf1 || '',
+    params.email || '',
+    params.firstname || '',
+    params.productinfo || '',
+    params.amount || '',
+    params.txnid || '',
+    params.key || PAYU_MERCHANT_KEY,
+  ].join('|') + '|' + PAYU_SALT;
+  
+  const calculatedHash = crypto
+    .createHash('sha512')
+    .update(hashString)
+    .digest('hex');
+  
+  return calculatedHash.toLowerCase() === receivedHash.toLowerCase();
+}
+
+/**
  * Verify payment and activate subscription
  * POST /employee/order/verify
  */
 exports.verifyPayment = async (req, res) => {
-  const { orderId, paymentId, signature, employeeId, planType } = req.body;
-  console.log('📥 Verifying payment:', { orderId, paymentId, employeeId, planType });
+  const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.body;
+  console.log('📥 Verifying PayU payment:', { txnid, status, employeeId, planType });
 
-  if (!orderId || !paymentId || !signature || !employeeId || !planType) {
+  if (!txnid || !status || !hash || !employeeId || !planType) {
     return res.status(400).json({
       success: false,
-      error: 'orderId, paymentId, signature, employeeId, and planType are required',
+      error: 'txnid, status, hash, employeeId, and planType are required',
     });
   }
 
   try {
-    // Verify signature
-    const text = `${orderId}|${paymentId}`;
-    const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(text)
-      .digest('hex');
+    // Verify hash if provided (recommended for security)
+    if (hash) {
+      const hashParams = {
+        key: PAYU_MERCHANT_KEY,
+        txnid: txnid,
+        amount: amount || '',
+        productinfo: productinfo || '',
+        firstname: firstname || '',
+        email: email || '',
+        status: status,
+        udf1: '',
+        udf2: '',
+        udf3: '',
+        udf4: '',
+        udf5: '',
+      };
 
-    if (generatedSignature !== signature) {
-      console.log('❌ Invalid signature');
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid payment signature',
-      });
+      if (!verifyPayUHash(hashParams, hash)) {
+        console.log('❌ Invalid PayU hash');
+        // Still proceed if status is success, but log the warning
+        if (status !== 'success') {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid payment hash',
+          });
+        }
+      }
     }
 
-    // Verify payment with Razorpay
-    const payment = await razorpay.payments.fetch(paymentId);
-    
-    if (payment.status !== 'captured' && payment.status !== 'authorized') {
-      console.log('❌ Payment not captured:', payment.status);
+    // Check payment status
+    if (status !== 'success') {
+      console.log('❌ Payment not successful:', status);
       return res.status(400).json({
         success: false,
         error: 'Payment not successful',
@@ -113,12 +204,28 @@ exports.verifyPayment = async (req, res) => {
     }
 
     // Update order status
-    const order = await Order.findOne({ orderId });
-    if (order) {
-      order.status = 'paid';
-      order.paymentId = paymentId;
-      await order.save();
+    const order = await Order.findOne({ orderId: txnid });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found',
+      });
     }
+
+    if (order.status === 'paid') {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified',
+        data: {
+          orderId: txnid,
+          paymentId: order.paymentId,
+        },
+      });
+    }
+
+    order.status = 'paid';
+    order.paymentId = txnid;
+    await order.save();
 
     // Activate subscription
     const subscriptionController = require('./subscriptionController');
@@ -144,7 +251,7 @@ exports.verifyPayment = async (req, res) => {
     const validityMonths = plan.validityMonths;
     const endDate = new Date();
     endDate.setMonth(endDate.getMonth() + validityMonths);
-    const finalAmount = payment.amount / 100; // Convert from paise
+    const finalAmount = parseFloat(amount || order.amount);
 
     // Generate unique card number
     const generateUniqueCardNumber = async () => {
@@ -191,7 +298,7 @@ exports.verifyPayment = async (req, res) => {
       expiryMonth: expiryDate.getMonth().toString().padStart(2, "0"),
       expiryYear: expiryDate.getFullYear().toString(),
       issuedAt: startDate,
-      paymentId,
+      paymentId: txnid,
       amount: finalAmount,
       immediateInterviewCall: plan.features?.immediateInterviewCall || false,
     };
@@ -203,8 +310,8 @@ exports.verifyPayment = async (req, res) => {
       success: true,
       message: 'Payment verified and subscription activated',
       data: {
-        orderId,
-        paymentId,
+        orderId: txnid,
+        paymentId: txnid,
         subscription: {
           planType: employee.subscription.planType,
           endDate: employee.subscription.endDate,

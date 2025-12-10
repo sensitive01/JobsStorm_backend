@@ -4,9 +4,9 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+   cloud_name: process.env.CLOUDINARY_NAME,
+   api_key: process.env.CLOUDINARY_API_KEY,
+   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 const generatePublicId = (req, file, prefix) => {
