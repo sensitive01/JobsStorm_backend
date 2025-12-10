@@ -256,31 +256,6 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Update order status to paid and store payment details
-    order.status = 'paid';
-    order.paymentId = txnid;
-    order.verifiedAt = new Date();
-    order.paymentResponse = {
-      status: status,
-      txnid: txnid,
-      amount: amount || order.amount,
-      productinfo: productinfo || '',
-      firstname: firstname || '',
-      email: email || '',
-      verifiedAt: new Date(),
-    };
-    // Store validity on the order for history display
-    order.subscriptionStart = startDate;
-    order.subscriptionEnd = endDate;
-    // Extract payment method from PayU response if available
-    if (req.body.payment_source) {
-      order.paymentMethod = req.body.payment_source;
-    } else if (req.body.mode) {
-      order.paymentMethod = req.body.mode;
-    }
-    await order.save();
-    console.log('📝 Order status updated to paid:', txnid);
-
     // Activate subscription
     const subscriptionController = require('./subscriptionController');
     
@@ -316,6 +291,31 @@ exports.verifyPayment = async (req, res) => {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + validityMonths);
     const finalAmount = parseFloat(amount || order.amount);
+
+    // Update order status to paid and store payment details (after dates computed)
+    order.status = 'paid';
+    order.paymentId = txnid;
+    order.verifiedAt = new Date();
+    order.paymentResponse = {
+      status: status,
+      txnid: txnid,
+      amount: amount || order.amount,
+      productinfo: productinfo || '',
+      firstname: firstname || '',
+      email: email || '',
+      verifiedAt: new Date(),
+    };
+    // Store validity on the order for history display
+    order.subscriptionStart = startDate;
+    order.subscriptionEnd = endDate;
+    // Extract payment method from PayU response if available
+    if (req.body.payment_source) {
+      order.paymentMethod = req.body.payment_source;
+    } else if (req.body.mode) {
+      order.paymentMethod = req.body.mode;
+    }
+    await order.save();
+    console.log('📝 Order status updated to paid:', txnid);
 
     // Generate unique card number
     const generateUniqueCardNumber = async () => {
