@@ -9,6 +9,6 @@ paymentRoute.post('/order/create', candidateOrderController.createOrder);
 paymentRoute.post('/order/verify', candidateOrderController.verifyPayment);
 
 // NEW: Handle PayU Redirect (This matches the surl/furl in the controller)
-paymentRoute.post('/payu-response', candidateOrderController.handlePayUResponse);
+// paymentRoute.post('/payu-response', candidateOrderController.handlePayUResponse);
 
 module.exports = paymentRoute;
