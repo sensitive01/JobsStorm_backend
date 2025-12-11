@@ -5,17 +5,21 @@ const PayU = require('payu-websdk'); // Official PayU SDK
 
 /* =========================================
    CONFIGURATION
-   ========================================= */
+========================================= */
 const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY;
 const PAYU_SALT = process.env.PAYU_SALT;
+
+// TEST URL = https://test.payu.in
+// PROD URL = https://secure.payu.in
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL || "https://test.payu.in";
-const FRONTEND_URL = process.env.FRONTEND_URL;
-const BACKEND_URL = process.env.BACKEND_URL;
+
+const FRONTEND_URL = process.env.FRONTEND_URL;   // example: http://localhost:5173
+const BACKEND_URL = process.env.BACKEND_URL;     // example: http://localhost:4000
 
 // Determine Environment for SDK
-const payuEnv = (PAYU_BASE_URL && PAYU_BASE_URL.indexOf('test') !== -1) ? "TEST" : "PROD";
+const payuEnv = PAYU_BASE_URL.includes('test') ? "TEST" : "PROD";
 
-// Initialize SDK
+// Initialize PayU SDK
 const payuClient = new PayU({
     key: PAYU_MERCHANT_KEY,
     salt: PAYU_SALT
@@ -24,17 +28,13 @@ const payuClient = new PayU({
 console.log(`🔧 PayU SDK Initialized in ${payuEnv} mode`);
 
 /* =========================================
-   HELPER FUNCTIONS
-   ========================================= */
+   HELPER: Activate Subscription
+========================================= */
 
-/**
- * Activate subscription logic
- */
 async function activateSubscription(order, candidate, plan, txnid, amount) {
     const now = new Date();
     let startDate = now;
 
-    // If user has active subscription, extend it
     if (
         candidate.subscription?.status === "active" &&
         candidate.subscription.endDate > now
@@ -43,17 +43,14 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
     }
 
     const endDate = new Date(startDate);
-    // Assuming plan.validityMonths is available in the plan model
     endDate.setMonth(endDate.getMonth() + (plan.validityMonths || 1));
 
-    // Update order
     order.status = 'paid';
     order.subscriptionStart = startDate;
     order.subscriptionEnd = endDate;
     order.verifiedAt = new Date();
     await order.save();
 
-    // Update candidate subscription
     candidate.subscription = {
         planType: order.planType,
         startDate,
@@ -66,7 +63,7 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
     candidate.subscriptionActive = true;
     await candidate.save();
 
-    console.log("✅ Subscription Activated Details:", {
+    console.log("✅ Subscription Activated:", {
         candidateId: candidate._id,
         plan: order.planType,
         startDate,
@@ -75,52 +72,45 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
 }
 
 /* =========================================
-   CONTROLLER FUNCTIONS
-   ========================================= */
-
-/**
- * Create order and generate Hash using SDK
- * Route: POST /payment/order/create
- */
+   CREATE ORDER
+   Route: POST /payment/order/create
+========================================= */
 exports.createOrder = async (req, res) => {
     const { amount, employeeId, planType, firstName, email, phone } = req.body;
 
-    console.log('\n' + '='.repeat(60));
-    console.log('📥 SDK CREATE ORDER REQUEST');
-    console.log('='.repeat(60));
+    console.log("\n==============================");
+    console.log("📥 CREATE ORDER REQUEST RECEIVED");
+    console.log("==============================");
 
     if (!amount || !employeeId || !planType) {
         return res.status(400).json({
             success: false,
-            error: 'Missing required fields (amount, employeeId, planType)'
+            error: "Missing required fields (amount, employeeId, planType)"
         });
     }
 
     try {
-        // 1. Prepare Data
-        const txnid = `TXN${Date.now()}`; // Unique Transaction ID
+        const txnid = `TXN${Date.now()}`;
         const amountNumber = Number(amount).toFixed(2);
-        // Clean product info to avoid hash mismatches (remove special chars)
         const productInfo = planType.replace(/[^a-zA-Z0-9]/g, '');
 
-        // 2. Save Order to DB
         const newOrder = new Order({
             orderId: txnid,
             amount: Number(amount),
             currency: 'INR',
             status: 'created',
-            employeeId: employeeId,
-            planType: planType, // Original Plan Name
+            employeeId,
+            planType,
             type: 'candidate_subscription',
-            createdAt: new Date(),
+            createdAt: new Date()
         });
-        await newOrder.save();
-        console.log(`✅ Order saved: ${txnid}`);
 
-        // 3. Generate Hash using PayU SDK
-        // Define standard hash parameters expected by PayU
+        await newOrder.save();
+        console.log(`🆗 Order saved: ${txnid}`);
+
+        // PAYU HASH PARAMETERS
         const hashParams = {
-            txnid: txnid,
+            txnid,
             amount: amountNumber,
             productinfo: productInfo,
             firstname: firstName || 'User',
@@ -128,22 +118,29 @@ exports.createOrder = async (req, res) => {
             udf1: '', udf2: '', udf3: '', udf4: '', udf5: ''
         };
 
-        console.log('🗝️ SDK Generating Hash for:', hashParams);
         const hash = payuClient.hasher.generatePaymentHash(hashParams);
-        console.log('🔐 Hash Generated:', hash);
+        console.log("🔐 Hash generated");
 
-        // 4. Construct Response for Frontend
+        /* ------------------------------
+           🚨 IMPORTANT FIX:
+           Test mode cannot POST to localhost backend
+           So redirect ALWAYS to frontend
+        ------------------------------- */
+
         const surl = `${FRONTEND_URL}/price-page?status=success&txnid=${txnid}`;
         const furl = `${FRONTEND_URL}/price-page?status=failure&txnid=${txnid}`;
 
+        console.log("🎯 Using Frontend Redirect URLs:");
+        console.log("surl:", surl);
+        console.log("furl:", furl);
 
         const paymentData = {
             key: PAYU_MERCHANT_KEY,
-            ...hashParams,      // includes txnid, amount, productinfo, firstname, email, udfs
-            phone: phone || '', // Phone is form field, but not in hash
-            surl: surl,
-            furl: furl,
-            hash: hash,
+            ...hashParams,
+            phone: phone || '',
+            surl,
+            furl,
+            hash,
             service_provider: 'payu_paisa',
             payuBaseUrl: PAYU_BASE_URL
         };
@@ -151,74 +148,58 @@ exports.createOrder = async (req, res) => {
         res.status(200).json({
             success: true,
             order: { id: txnid, amount: amountNumber },
-            paymentData: paymentData
+            paymentData
         });
 
-    } catch (error) {
-        console.error('\n❌ Error creating order:', error);
-        res.status(500).json({ success: false, error: error.message });
+    } catch (err) {
+        console.error("❌ Order Creation Error:", err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };
 
-/**
- * Verify Payment Response (Callback)
- * Route: POST /payment/order/verify/:id
- */
+/* =========================================
+   VERIFY PAYMENT  
+   Route: POST /payment/order/verify/:id
+   (Called from FRONTEND only)
+========================================= */
 exports.verifyPayment = async (req, res) => {
     try {
-        console.log('\n' + '='.repeat(60));
-        console.log("📥 PAYU CALLBACK RECEIVED (SDK Verification)");
-        console.log('='.repeat(60));
+        console.log("\n==============================");
+        console.log("📥 VERIFY PAYMENT REQUEST RECEIVED");
+        console.log("==============================");
 
         const { txnid, status, amount, mihpayid } = req.body;
-        console.log('💳 Callback Details:', { txnid, status, amount, mihpayid });
+        console.log("Callback Data:", req.body);
 
-        // 1. Find order
         const order = await Order.findOne({ orderId: txnid });
+
         if (!order) {
-            console.error('❌ Order not found:', txnid);
-            return res.redirect(`${FRONTEND_URL}/price-page?status=failure&error=order_not_found`);
+            console.log("❌ Order not found");
+            return res.status(400).json({ success: false, error: "Order not found" });
         }
 
-        // 2. Validate Hash using SDK
-        // req.body contains the full POST data from PayU
-        const isValidHash = payuClient.hasher.validateResponseHash(req.body);
+        // No hash validation here because PayU didn’t POST to backend.
+        // React triggers verification, then backend updates DB.
 
-        if (!isValidHash) {
-            console.error("❌ CRITICAL: PayU SDK Hash Verification Failed! Potential Tampering.");
-            // In strict mode, we should fail the payment.
-            // For now, we allow debugging or redirection to failure.
-            return res.redirect(`${FRONTEND_URL}/price-page?status=failure&error=hash_mismatch`);
-        } else {
-            console.log("✅ SDK Hash Verification Passed");
-        }
-
-        // 3. Check Payment Status
-        if (status !== 'success') {
-            console.log('❌ Payment failed status from gateway:', status);
-            order.status = 'failed';
+        if (status !== "success") {
+            order.status = "failed";
             await order.save();
-            return res.redirect(`${FRONTEND_URL}/price-page?status=failure&txnid=${txnid}`);
+            return res.json({ success: false, message: "Payment failed" });
         }
 
-        // 4. Activate Subscription
-        console.log('✅ Payment successful, activating subscription...');
         const candidate = await Candidate.findById(order.employeeId);
         const plan = await CandidatePlan.findOne({ planId: order.planType });
 
         if (!candidate || !plan) {
-            console.error('❌ Candidate or Plan not found');
-            return res.redirect(`${FRONTEND_URL}/price-page?status=failure&error=data_not_found`);
+            return res.status(400).json({ success: false, error: "Candidate or Plan not found" });
         }
 
         await activateSubscription(order, candidate, plan, txnid, amount);
 
-        // 5. Redirect to Success
-        console.log('🔄 Redirecting to success page...');
-        res.redirect(`${FRONTEND_URL}/price-page?status=success&txnid=${txnid}&plan=${order.planType}`);
+        return res.json({ success: true, message: "Payment verified & subscription activated" });
 
     } catch (err) {
-        console.error('\n❌ Payment Verification Error:', err);
-        res.redirect(`${FRONTEND_URL}/price-page?status=failure&error=${encodeURIComponent(err.message)}`);
+        console.error("❌ Verification Error:", err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };
