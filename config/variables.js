@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 module.exports = {
-    PORT: process.env.PORT || 3002,
+    PORT: process.env.PORT || 4001,
     MONGO_USERNAME_JOB: process.env.MONGO_USERNAME_JOB,
     MONGO_PASSWORD_JOB: process.env.MONGO_PASSWORD_JOB,
     MONGO_DATABASE_NAME_JOB: process.env.MONGO_DATABASE_NAME_JOB,
