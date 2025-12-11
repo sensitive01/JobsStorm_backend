@@ -1,12 +1,17 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../../controller/employeeController/paymentController");
+const paymentController = require("../../controller/employeeController/paymentController");
 
-// FRONTEND hits this to create a PayU order
-router.post("/order/create", controller.createOrder);
+// Create order (initiate payment)
+router.post("/create-order", paymentController.createOrder);
 
-// PayU hits these after payment
-router.post("/payu/success", controller.handlePayUSuccess);
-router.post("/payu/failure", controller.handlePayUFailure);
+// ✅ Single unified callback for both success and failure
+router.post("/payu/callback", paymentController.handlePayUCallback);
+
+// Get user subscription (optional)
+router.get("/subscription/:employeeId", paymentController.getUserSubscription);
+
+router.get("/payu/redirect", paymentController.handlePayURedirect);
+
 
 module.exports = router;
