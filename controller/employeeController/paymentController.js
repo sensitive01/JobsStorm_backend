@@ -1,36 +1,17 @@
-const Order = require('../../models/orderSchema');
-const Candidate = require('../../models/employeeschema');
-const CandidatePlan = require('../../models/employeePlansSchema');
-const PayU = require('payu-websdk'); // Official PayU SDK
+const Order = require("../../models/orderSchema");
+const Candidate = require("../../models/employeeschema");
+const CandidatePlan = require("../../models/employeePlansSchema");
+const crypto = require("crypto");
 
-/* =========================================
-   CONFIGURATION
-========================================= */
 const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY;
 const PAYU_SALT = process.env.PAYU_SALT;
-
-// TEST URL = https://test.payu.in
-// PROD URL = https://secure.payu.in
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL || "https://test.payu.in";
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const BACKEND_URL = process.env.BACKEND_URL;
 
-const FRONTEND_URL = process.env.FRONTEND_URL;   // example: http://localhost:5173
-const BACKEND_URL = process.env.BACKEND_URL;     // example: http://localhost:4000
-
-// Determine Environment for SDK
-const payuEnv = PAYU_BASE_URL.includes('test') ? "TEST" : "PROD";
-
-// Initialize PayU SDK
-const payuClient = new PayU({
-    key: PAYU_MERCHANT_KEY,
-    salt: PAYU_SALT
-}, payuEnv);
-
-console.log(`🔧 PayU SDK Initialized in ${payuEnv} mode`);
-
-/* =========================================
-   HELPER: Activate Subscription
-========================================= */
-
+// -----------------------------------------------------
+// 1. Activate subscription
+// -----------------------------------------------------
 async function activateSubscription(order, candidate, plan, txnid, amount) {
     const now = new Date();
     let startDate = now;
@@ -45,10 +26,9 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + (plan.validityMonths || 1));
 
-    order.status = 'paid';
+    order.status = "paid";
     order.subscriptionStart = startDate;
     order.subscriptionEnd = endDate;
-    order.verifiedAt = new Date();
     await order.save();
 
     candidate.subscription = {
@@ -56,150 +36,131 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
         startDate,
         endDate,
         status: "active",
-        cardNumber: "45" + Math.floor(1e9 + Math.random() * 9e9),
         paymentId: txnid,
-        amount: Number(amount)
+        amount: Number(amount),
     };
+
     candidate.subscriptionActive = true;
     await candidate.save();
 
-    console.log("✅ Subscription Activated:", {
-        candidateId: candidate._id,
-        plan: order.planType,
-        startDate,
-        endDate
-    });
+    console.log("✅ Subscription Activated:", candidate._id);
 }
 
-/* =========================================
-   CREATE ORDER
-   Route: POST /payment/order/create
-========================================= */
+// -----------------------------------------------------
+// 2. Create Order (Called by frontend)
+// -----------------------------------------------------
 exports.createOrder = async (req, res) => {
-    const { amount, employeeId, planType, firstName, email, phone } = req.body;
-
-    console.log("\n==============================");
-    console.log("📥 CREATE ORDER REQUEST RECEIVED");
-    console.log("==============================");
-
-    if (!amount || !employeeId || !planType) {
-        return res.status(400).json({
-            success: false,
-            error: "Missing required fields (amount, employeeId, planType)"
-        });
-    }
-
     try {
-        const txnid = `TXN${Date.now()}`;
-        const amountNumber = Number(amount).toFixed(2);
-        const productInfo = planType.replace(/[^a-zA-Z0-9]/g, '');
+        const { amount, employeeId, planType, firstName, email, phone } = req.body;
 
-        const newOrder = new Order({
+        if (!amount || !employeeId || !planType) {
+            return res
+                .status(400)
+                .json({ success: false, error: "Missing required fields" });
+        }
+
+        const txnid = `TXN${Date.now()}`;
+        const productinfo = planType.replace(/[^a-zA-Z0-9]/g, "");
+
+        // Save Order
+        await Order.create({
             orderId: txnid,
-            amount: Number(amount),
-            currency: 'INR',
-            status: 'created',
+            amount,
             employeeId,
             planType,
-            type: 'candidate_subscription',
-            createdAt: new Date()
+            status: "created",
+            currency: "INR",
         });
 
-        await newOrder.save();
-        console.log(`🆗 Order saved: ${txnid}`);
+        // IMPORTANT: Correct callback URLs (NO /api)
+        const surl = `${BACKEND_URL}/payment/payu/success`;
+        const furl = `${BACKEND_URL}/payment/payu/failure`;
 
-        // PAYU HASH PARAMETERS
-        const hashParams = {
-            txnid,
-            amount: amountNumber,
-            productinfo: productInfo,
-            firstname: firstName || 'User',
-            email: email || '',
-            udf1: '', udf2: '', udf3: '', udf4: '', udf5: ''
-        };
+        // Correct Forward Hash – MUST MATCH PAYU FORMAT EXACTLY
+        const hashString =
+            `${PAYU_MERCHANT_KEY}|${txnid}|${amount}|${productinfo}|${firstName}|${email}` +
+            `|||||||||||${PAYU_SALT}`;
 
-        const hash = payuClient.hasher.generatePaymentHash(hashParams);
-        console.log("🔐 Hash generated");
+        const hash = crypto.createHash("sha512").update(hashString).digest("hex");
 
-        /* ------------------------------
-           🚨 IMPORTANT FIX:
-           Test mode cannot POST to localhost backend
-           So redirect ALWAYS to frontend
-        ------------------------------- */
-
-        const surl = `${FRONTEND_URL}/price-page?status=success&txnid=${txnid}`;
-        const furl = `${FRONTEND_URL}/price-page?status=failure&txnid=${txnid}`;
-
-        console.log("🎯 Using Frontend Redirect URLs:");
-        console.log("surl:", surl);
-        console.log("furl:", furl);
-
-        const paymentData = {
-            key: PAYU_MERCHANT_KEY,
-            ...hashParams,
-            phone: phone || '',
-            surl,
-            furl,
-            hash,
-            service_provider: 'payu_paisa',
-            payuBaseUrl: PAYU_BASE_URL
-        };
-
-        res.status(200).json({
+        return res.json({
             success: true,
-            order: { id: txnid, amount: amountNumber },
-            paymentData
+            paymentData: {
+                key: PAYU_MERCHANT_KEY,
+                txnid,
+                amount,
+                productinfo,
+                firstname: firstName,
+                email,
+                phone,
+                surl,
+                furl,
+                hash,
+                service_provider: "payu_paisa",
+                payuBaseUrl: PAYU_BASE_URL,
+            },
         });
-
     } catch (err) {
-        console.error("❌ Order Creation Error:", err);
+        console.error("❌ createOrder Error:", err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
 
-/* =========================================
-   VERIFY PAYMENT  
-   Route: POST /payment/order/verify/:id
-   (Called from FRONTEND only)
-========================================= */
-exports.verifyPayment = async (req, res) => {
+// -----------------------------------------------------
+// 3. PayU Success Callback
+// -----------------------------------------------------
+exports.handlePayUSuccess = async (req, res) => {
     try {
-        console.log("\n==============================");
-        console.log("📥 VERIFY PAYMENT REQUEST RECEIVED");
-        console.log("==============================");
+        const posted = req.body;
 
-        const { txnid, status, amount, mihpayid } = req.body;
-        console.log("Callback Data:", req.body);
+        console.log("📥 PayU Success Callback Received:", posted);
 
-        const order = await Order.findOne({ orderId: txnid });
+        // Correct Reverse Hash
+        const reverseHashStr =
+            `${PAYU_SALT}|${posted.status}|||||||||||${posted.email}|${posted.firstname}|${posted.productinfo}|${posted.amount}|${posted.txnid}|${PAYU_MERCHANT_KEY}`;
 
-        if (!order) {
-            console.log("❌ Order not found");
-            return res.status(400).json({ success: false, error: "Order not found" });
+        const calcHash = crypto
+            .createHash("sha512")
+            .update(reverseHashStr)
+            .digest("hex");
+
+        if (calcHash !== posted.hash) {
+            console.log("❌ HASH MISMATCH");
+            console.log("Expected:", calcHash);
+            console.log("Got:", posted.hash);
+            return res.redirect(
+                `${FRONTEND_URL}/price-page?status=failure&msg=hash_error`
+            );
         }
 
-        // No hash validation here because PayU didn’t POST to backend.
-        // React triggers verification, then backend updates DB.
-
-        if (status !== "success") {
-            order.status = "failed";
-            await order.save();
-            return res.json({ success: false, message: "Payment failed" });
-        }
-
+        const order = await Order.findOne({ orderId: posted.txnid });
         const candidate = await Candidate.findById(order.employeeId);
         const plan = await CandidatePlan.findOne({ planId: order.planType });
 
-        if (!candidate || !plan) {
-            return res.status(400).json({ success: false, error: "Candidate or Plan not found" });
+        if (order && candidate && plan) {
+            await activateSubscription(order, candidate, plan, posted.txnid, posted.amount);
         }
 
-        await activateSubscription(order, candidate, plan, txnid, amount);
-
-        return res.json({ success: true, message: "Payment verified & subscription activated" });
-
+        return res.redirect(
+            `${FRONTEND_URL}/price-page?status=success&txnid=${posted.txnid}`
+        );
     } catch (err) {
-        console.error("❌ Verification Error:", err);
-        res.status(500).json({ success: false, error: err.message });
+        console.error("❌ PayU Success Handler Error:", err);
+        return res.redirect(`${FRONTEND_URL}/price-page?status=failure`);
     }
+};
+
+// -----------------------------------------------------
+// 4. PayU Failure Callback
+// -----------------------------------------------------
+exports.handlePayUFailure = async (req, res) => {
+    const posted = req.body;
+    await Order.updateOne(
+        { orderId: posted.txnid },
+        { status: "failed" }
+    );
+
+    return res.redirect(
+        `${FRONTEND_URL}/price-page?status=failure&txnid=${posted.txnid}`
+    );
 };

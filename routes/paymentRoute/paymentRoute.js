@@ -1,14 +1,12 @@
-const express = require('express');
-const paymentRoute = express.Router();
-const candidateOrderController = require('../../controller/employeeController/paymentController'); // Adjusted path
+const express = require("express");
+const router = express.Router();
+const controller = require("../../controller/employeeController/paymentController");
 
-// Create Order for Payment
-paymentRoute.post('/order/create', candidateOrderController.createOrder);
+// FRONTEND hits this to create a PayU order
+router.post("/order/create", controller.createOrder);
 
-// Verify Payment after success
-paymentRoute.post('/order/verify/:id', candidateOrderController.verifyPayment);
+// PayU hits these after payment
+router.post("/payu/success", controller.handlePayUSuccess);
+router.post("/payu/failure", controller.handlePayUFailure);
 
-// NEW: Handle PayU Redirect (This matches the surl/furl in the controller)
-// paymentRoute.post('/payu-response', candidateOrderController.handlePayUResponse);
-
-module.exports = paymentRoute;
+module.exports = router;
