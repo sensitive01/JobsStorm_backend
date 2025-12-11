@@ -96,6 +96,8 @@ exports.sendMessage = async (req, res) => {
     };
 
     // Find or create chat
+    // Note: Removed unreadCountEmployer and unreadCountEmployee from $setOnInsert
+    // to avoid conflict with $inc. They have default values of 0 in the schema.
     const chat = await Chat.findOneAndUpdate(
       { employeeId, employerId, jobId },
       {
@@ -105,8 +107,6 @@ exports.sendMessage = async (req, res) => {
           employerName: employerName || "",
           employerImage: employerImage || "",
           position: position || "",
-          unreadCountEmployer: 0,
-          unreadCountEmployee: 0,
         },
         $push: { messages: newMessage },
         $set: {
