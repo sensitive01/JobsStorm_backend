@@ -133,8 +133,9 @@ exports.createOrder = async (req, res) => {
         console.log('🔐 Hash Generated:', hash);
 
         // 4. Construct Response for Frontend
-        const surl = `${BACKEND_URL}/payment/order/verify/${txnid}`;
-        const furl = `${BACKEND_URL}/payment/order/verify/${txnid}`;
+        const surl = `${FRONTEND_URL}/price-page?status=success&txnid=${txnid}`;
+        const furl = `${FRONTEND_URL}/price-page?status=failure&txnid=${txnid}`;
+
 
         const paymentData = {
             key: PAYU_MERCHANT_KEY,
