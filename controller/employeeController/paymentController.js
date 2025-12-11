@@ -52,16 +52,12 @@ async function activateSubscription(order, candidate, plan, txnid, amount) {
 exports.createOrder = async (req, res) => {
     try {
         const { amount, employeeId, planType, firstName, email, phone } = req.body;
-
         if (!amount || !employeeId || !planType) {
-            return res
-                .status(400)
-                .json({ success: false, error: "Missing required fields" });
+            return res.status(400).json({ success: false, error: "Missing required fields" });
         }
-
         const txnid = `TXN${Date.now()}`;
         const productinfo = planType.replace(/[^a-zA-Z0-9]/g, "");
-
+        const udf1 = "123456"; // <--- ADDED UDF1 HERE
         // Save Order
         await Order.create({
             orderId: txnid,
@@ -71,18 +67,14 @@ exports.createOrder = async (req, res) => {
             status: "created",
             currency: "INR",
         });
-
-        // IMPORTANT: Correct callback URLs (NO /api)
+        // IMPORTANT: Correct callback URLs
         const surl = `${BACKEND_URL}/payment/payu/success`;
         const furl = `${BACKEND_URL}/payment/payu/failure`;
-
-        // Correct Forward Hash – MUST MATCH PAYU FORMAT EXACTLY
+        // Correct Forward Hash – ADDED udf1
+        // Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|...|salt
         const hashString =
-            `${PAYU_MERCHANT_KEY}|${txnid}|${amount}|${productinfo}|${firstName}|${email}` +
-            `|||||||||||${PAYU_SALT}`;
-
+            `${PAYU_MERCHANT_KEY}|${txnid}|${amount}|${productinfo}|${firstName}|${email}|${udf1}|||||||||${PAYU_SALT}`;
         const hash = crypto.createHash("sha512").update(hashString).digest("hex");
-
         return res.json({
             success: true,
             paymentData: {
@@ -98,6 +90,7 @@ exports.createOrder = async (req, res) => {
                 hash,
                 service_provider: "payu_paisa",
                 payuBaseUrl: PAYU_BASE_URL,
+                udf1: udf1, // <--- Send UDF1 to frontend
             },
         });
     } catch (err) {
@@ -112,35 +105,34 @@ exports.createOrder = async (req, res) => {
 exports.handlePayUSuccess = async (req, res) => {
     try {
         const posted = req.body;
-
         console.log("📥 PayU Success Callback Received:", posted);
-
-        // Correct Reverse Hash
+        // Correct Reverse Hash - ADDED posted.udf1
+        // Format: salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+        
+        // Note: The empty pipes block must have ONE LESS pipe because udf1 is now filled.
+        // Original (all empty): ||||||||||| (11 pipes)
+        // New (udf1 filled):    ||||||||||${posted.udf1}| (10 empty pipes + value + 1 pipe)
+        
         const reverseHashStr =
-            `${PAYU_SALT}|${posted.status}|||||||||||${posted.email}|${posted.firstname}|${posted.productinfo}|${posted.amount}|${posted.txnid}|${PAYU_MERCHANT_KEY}`;
-
+            `${PAYU_SALT}|${posted.status}||||||||||${posted.udf1}|${posted.email}|${posted.firstname}|${posted.productinfo}|${posted.amount}|${posted.txnid}|${PAYU_MERCHANT_KEY}`;
         const calcHash = crypto
             .createHash("sha512")
             .update(reverseHashStr)
             .digest("hex");
-
         if (calcHash !== posted.hash) {
             console.log("❌ HASH MISMATCH");
-            console.log("Expected:", calcHash);
-            console.log("Got:", posted.hash);
+            console.log("Calculated:", calcHash);
+            console.log("Received:", posted.hash);
             return res.redirect(
                 `${FRONTEND_URL}/price-page?status=failure&msg=hash_error`
             );
         }
-
         const order = await Order.findOne({ orderId: posted.txnid });
         const candidate = await Candidate.findById(order.employeeId);
         const plan = await CandidatePlan.findOne({ planId: order.planType });
-
         if (order && candidate && plan) {
             await activateSubscription(order, candidate, plan, posted.txnid, posted.amount);
         }
-
         return res.redirect(
             `${FRONTEND_URL}/price-page?status=success&txnid=${posted.txnid}`
         );
