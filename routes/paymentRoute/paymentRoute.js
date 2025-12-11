@@ -6,7 +6,7 @@ const candidateOrderController = require('../../controller/employeeController/pa
 paymentRoute.post('/order/create', candidateOrderController.createOrder);
 
 // Verify Payment after success
-paymentRoute.post('/order/verify', candidateOrderController.verifyPayment);
+paymentRoute.post('/order/verify/:id', candidateOrderController.verifyPayment);
 
 // NEW: Handle PayU Redirect (This matches the surl/furl in the controller)
 // paymentRoute.post('/payu-response', candidateOrderController.handlePayUResponse);

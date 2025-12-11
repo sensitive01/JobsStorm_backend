@@ -22,9 +22,10 @@ initializeAdmin();
 
 
 app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const allowedOrigins = ["http://localhost:5174","http://localhost:5173","https://job-storm-frontend.vercel.app","https://job-strom-employer.vercel.app","https://job-strom-employer.vercel.app","https://jobsstorm-admin-panel.vercel.app","https://jobsstorm.com","https://admin.jobsstorm.com","https://employer.jobsstorm.com"];
+const allowedOrigins = ["http://localhost:5174", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in"];
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -124,7 +125,7 @@ cron.schedule("59 23 * * *", async () => {
     let expiredCount = 0;
     for (const employee of employeesWithSubscriptions) {
       const endDate = new Date(employee.subscription.endDate);
-      
+
       // If subscription has expired, update status and subscriptionActive
       if (endDate <= today) {
         employee.subscription.status = 'expired';
