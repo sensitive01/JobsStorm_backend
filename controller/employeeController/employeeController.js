@@ -282,20 +282,20 @@ const applyForJob = async (req, res) => {
     // Check subscription status
     const subscription = candidateData.subscription || {};
     const now = new Date();
-    const isActive = 
+    const isActive =
       subscription.status === "active" &&
       subscription.endDate &&
       new Date(subscription.endDate) > now;
-    
+
     // Get plan details from database to determine features
     const EmployeePlan = require("../../models/employeePlansSchema");
-    const plan = await EmployeePlan.findOne({ 
+    const plan = await EmployeePlan.findOne({
       planId: subscription.planType || "silver",
-      isActive: true 
+      isActive: true
     });
-    
-    const hasImmediateCall = 
-      isActive && 
+
+    const hasImmediateCall =
+      isActive &&
       plan?.features?.immediateInterviewCall === true &&
       subscription.immediateInterviewCall;
 
@@ -342,12 +342,12 @@ const applyForJob = async (req, res) => {
 
     // Get plan name for message
     const planName = plan?.name || subscription.planType || "Silver";
-    
-    const responseMessage = hasImmediateCall 
+
+    const responseMessage = hasImmediateCall
       ? "Application submitted successfully! You'll get an immediate interview call."
       : isActive && plan?.features?.priorityToRecruiters && plan.features.priorityToRecruiters !== "none"
-      ? `Application submitted successfully! You have ${plan.features.priorityToRecruiters} priority in the application pool.`
-      : "Application submitted successfully!";
+        ? `Application submitted successfully! You have ${plan.features.priorityToRecruiters} priority in the application pool.`
+        : "Application submitted successfully!";
 
     res.status(201).json({
       success: true,
@@ -1859,7 +1859,6 @@ const getRandomBlogs = async (req, res) => {
       { $sample: { size: 3 } }, // Fetch 3 random blogs
     ]);
 
-    console.log("randomBlogs",randomBlogs)
 
     return res.status(200).json({
       success: true,
@@ -1877,13 +1876,181 @@ const getRandomBlogs = async (req, res) => {
 };
 
 
+const getJobStormCardData = async (req, res) => {
+  try {
+    const employeeId = req.params.employeeId;
+    const employee = await Employee.findById(employeeId, { subscriptionActive: 1, subscription: 1, userName: 1 });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "JobStorm card data fetched successfully",
+      employee,
+      isSubscribed: employee.subscriptionActive,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching jobstorm card data:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching jobstorm card data",
+      error: err.message,
+    });
+  }
+}
+
+const isCandidateSubscribed = async (req, res) => {
+  try {
+    const employeeId = req.params.employeeId;
+    const employee = await Employee.findById(employeeId, { subscriptionActive: 1 });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "JobStorm card data fetched successfully",
+
+      isSubscribed: employee.subscriptionActive,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching jobstorm card data:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching jobstorm card data",
+      error: err.message,
+    });
+  }
+}
 
 
+const geCandidateDashboardData = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    let profileViews = 0;
 
+    // ✅ 1. SAVED JOB COUNT
+    const employee = await Employee.findById(candidateId, { savedJobs: 1 }).lean();
+    const savedJobCount = employee?.savedJobs?.length || 0;
+
+    // ✅ 2. APPLIED JOB COUNT (STRING MATCH)
+    const appliedJobCount = await Job.countDocuments({
+      "applications.applicantId": candidateId   // ✅ STRING MATCH
+    });
+
+    // ✅ 3. INTERVIEW COUNT (ACCORDING TO YOUR DB)
+    const interviewData = await Job.aggregate([
+      { $match: { "applications.applicantId": candidateId } },
+
+      {
+        $project: {
+          applications: {
+            $filter: {
+              input: "$applications",
+              as: "app",
+              cond: {
+                $and: [
+                  { $eq: ["$$app.applicantId", candidateId] },
+                  { $eq: ["$$app.status", "Interview Scheduled"] } // ✅ FIXED CASE
+                ]
+              }
+            }
+          }
+        }
+      },
+
+      { $unwind: "$applications" },
+      { $count: "count" }
+    ]);
+
+    const interviewScheduledCount = interviewData[0]?.count || 0;
+
+    // ✅ 4. RECENT APPLIED JOBS (LAST 3)
+    const recentJobs = await Job.aggregate([
+      { $match: { "applications.applicantId": candidateId } },
+
+      {
+        $project: {
+          jobTitle: 1,
+          companyName: 1,
+          location: 1,
+          jobType: 1,
+          salaryFrom: 1,
+          salaryTo: 1,
+          applications: {
+            $filter: {
+              input: "$applications",
+              as: "app",
+              cond: { $eq: ["$$app.applicantId", candidateId] }
+            }
+          }
+        }
+      },
+
+      { $unwind: "$applications" },
+
+      // ✅ SORT BY appliedDate DESC
+      { $sort: { "applications.appliedDate": -1 } },
+
+      // ✅ RETURN ONLY 3
+      { $limit: 3 },
+
+      {
+        $project: {
+          jobTitle: 1,
+          companyName: 1,
+          location: 1,
+          jobType: 1,
+
+
+          appliedDate: "$applications.appliedDate",
+          status: "$applications.status",
+          employApplicantStatus: "$applications.employApplicantStatus"
+        }
+      }
+    ]);
+
+    console.log(
+      "DASHBOARD =>",
+      savedJobCount,
+      appliedJobCount,
+      interviewScheduledCount,
+      recentJobs
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        savedJobCount,
+        appliedJobCount,
+        interviewScheduledCount,
+        profileViews,
+        recentAppliedJobs: recentJobs
+      }
+    });
+
+  } catch (err) {
+    console.error("Dashboard Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Dashboard data error"
+    });
+  }
+};
 
 
 //hbh
 module.exports = {
+  geCandidateDashboardData,
+  isCandidateSubscribed,
+  getJobStormCardData,
   getRandomBlogs,
   getDistinctCategoryLocation,
   getAllBlogs,

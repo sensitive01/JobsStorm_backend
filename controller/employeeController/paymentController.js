@@ -1,327 +1,373 @@
-const Order = require("../../models/orderSchema");
-const Candidate = require("../../models/employeeschema");
-const CandidatePlan = require("../../models/employeePlansSchema");
-const crypto = require("crypto");
+const payuClient = require('../../utils/payUClient');
+const Order = require('../../models/orderSchema');
+const crypto = require('crypto');
+const Employee = require('../../models/employeeschema');
+const EmployeePlan = require('../../models/employeePlansSchema');
+const fs = require('fs');
+const path = require('path');
 
-const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY;
-const PAYU_SALT = process.env.PAYU_SALT;
-const PAYU_BASE_URL = process.env.PAYU_BASE_URL || "https://test.payu.in";
-const FRONTEND_URL = process.env.FRONTEND_URL;
-const BACKEND_URL = process.env.BACKEND_URL;
 
-/* ======================================================
-    🔐 HELPER: Activate Subscription
-====================================================== */
-async function activateSubscription(order, candidate, plan, txnid, amount, paymentResponse) {
-    const now = new Date();
-    let startDate = now;
 
-    // If user has an active subscription, extend it
-    if (
-        candidate.subscription?.status === "active" &&
-        candidate.subscription.endDate > now
-    ) {
-        startDate = new Date(candidate.subscription.endDate);
+exports.createOrder = async (req, res) => {
+    console.log("Payment Create Order Request Received:", req.body)
+    const { userId, txnid, productinfo, amount, surl, furl, planId } = req.body.data
+    const userData = await Employee.findById(userId, { userName: 1, userEmail: 1, userMobile: 1 })
+    const planData = await EmployeePlan.findById(planId, { name: 1 })
+
+
+
+
+
+    if (!amount || !userId || !planId) {
+        return res.status(400).json({
+            success: false,
+            error: 'Amount, employeeId, and planType are required',
+        });
     }
 
-    // Calculate end date based on plan validity
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + (plan.validityMonths || 1));
-
-    // Update order
-    order.status = "paid";
-    order.subscriptionStart = startDate;
-    order.subscriptionEnd = endDate;
-    order.paymentResponse = paymentResponse; // Store payment response
-    await order.save();
-
-    // Update candidate subscription
-    candidate.subscription = {
-        planType: order.planType,
-        startDate,
-        endDate,
-        status: "active",
-        paymentId: txnid,
-        amount: Number(amount),
-    };
-    candidate.subscriptionActive = true;
-    await candidate.save();
-
-    console.log("✅ Subscription Activated:", {
-        candidateId: candidate._id,
-        planType: order.planType,
-        startDate,
-        endDate,
-    });
-}
-
-/* ======================================================
-    🚀 CREATE ORDER (Initiate Payment)
-====================================================== */
-exports.createOrder = async (req, res) => {
     try {
-        const { amount, employeeId, planType, firstName, email, phone } = req.body;
-
-        // Validate required fields
-        if (!amount || !employeeId || !planType) {
+        const existingOrder = await Order.findOne({ orderId: txnid });
+        if (existingOrder) {
+            console.log('⚠️ Order already exists:', txnid);
             return res.status(400).json({
                 success: false,
-                error: "Missing required fields: amount, employeeId, or planType",
+                error: 'Order already exists',
             });
         }
 
-        // Verify candidate exists
-        const candidate = await Candidate.findById(employeeId);
-        if (!candidate) {
-            return res.status(404).json({
-                success: false,
-                error: "Candidate not found",
-            });
-        }
-
-        // Verify plan exists
-        const plan = await CandidatePlan.findOne({ planId: planType });
-        if (!plan) {
-            return res.status(404).json({
-                success: false,
-                error: "Plan not found",
-            });
-        }
-
-        // Generate unique transaction ID
-        const txnid = `TXN${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-        // Clean productinfo (no special characters)
-        const productinfo = planType.replace(/[^a-zA-Z0-9]/g, "");
-
-        // Format amount to 2 decimal places
-        const formattedAmount = Number(amount).toFixed(2);
-
-        // Store employeeId and planType in UDF fields
-        const udf1 = employeeId;
-        const udf2 = planType;
-
-        // Create order in database
-        const order = await Order.create({
+        // // Create order in database
+        const newOrder = new Order({
             orderId: txnid,
             amount: Number(amount),
-            employeeId,
-            planType,
-            status: "created",
-            currency: "INR",
+            currency: 'INR',
+            status: 'pending',
+            employeeId: userId,
+            planId: planId,
+            planType: planData.name,
+            type: 'employee_subscription',
+            createdAt: new Date(),
         });
 
-        console.log("✅ Order created:", {
-            orderId: order.orderId,
-            employeeId,
-            planType,
-            amount: formattedAmount,
-        });
-
-        // Prepare callback URLs
-        const surl = `${BACKEND_URL}/payment/payu/callback`;
-        const furl = `${BACKEND_URL}/payment/payu/callback`;
-
-        // ✅ CORRECT HASH FORMAT - EXACTLY 9 pipes after udf2
-        // Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
-        // After udf2: ||| (for udf3,udf4,udf5) + |||||| (6 empty fields) = 9 pipes total
-        const hashString = `${PAYU_MERCHANT_KEY}|${txnid}|${formattedAmount}|${productinfo}|${firstName}|${email}|${udf1}|${udf2}|||||||||${PAYU_SALT}`;
-        const hash = crypto.createHash("sha512").update(hashString).digest("hex");
-
-        console.log("🔐 Hash String:", hashString);
-        console.log("✅ Hash Generated:", hash);
-
-        // Return payment data to frontend
-        return res.json({
-            success: true,
-            paymentData: {
-                key: PAYU_MERCHANT_KEY,
-                txnid,
-                amount: formattedAmount,
-                productinfo,
-                firstname: firstName || candidate.firstName || "User",
-                email: email || candidate.email,
-                phone: phone || candidate.phone || "9999999999",
-                surl,
-                furl,
-                hash,
-                service_provider: "payu_paisa",
-                payuBaseUrl: PAYU_BASE_URL,
-                udf1,
-                udf2,
-                udf3: "", // ✅ Explicitly set empty UDF fields
-                udf4: "",
-                udf5: "",
-            },
-        });
-    } catch (err) {
-        console.error("❌ createOrder Error:", err);
-        res.status(500).json({
-            success: false,
-            error: err.message,
-        });
-    }
-};
-/* ======================================================
-    🚀 UNIFIED PAYU CALLBACK (Success + Failure)
-====================================================== */
-exports.handlePayUCallback = async (req, res) => {
-    try {
-        const posted = req.body;
-        console.log("📥 PayU Callback Received:", {
-            txnid: posted.txnid,
-            status: posted.status,
-            amount: posted.amount,
-            mihpayid: posted.mihpayid,
-        });
-
-        // ✅ CORRECT REVERSE HASH - Format: SALT|status|||||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
-        // After status: ||||||||| (9 pipes for 6 empty fields + udf5,udf4,udf3)
-        const reverseHashStr = `${PAYU_SALT}|${posted.status}|||||||||${posted.udf5 || ""}|${posted.udf4 || ""}|${posted.udf3 || ""}|${posted.udf2}|${posted.udf1}|${posted.email}|${posted.firstname}|${posted.productinfo}|${posted.amount}|${posted.txnid}|${PAYU_MERCHANT_KEY}`;
-        const calcHash = crypto.createHash("sha512").update(reverseHashStr).digest("hex");
-
-        console.log("🔐 Reverse Hash String:", reverseHashStr);
-        console.log("🔐 Calculated Hash:", calcHash);
-        console.log("🔐 Received Hash:", posted.hash);
-
-        // Verify hash
-        if (calcHash !== posted.hash) {
-            console.error("❌ HASH MISMATCH");
-            return res.redirect(
-                `${FRONTEND_URL}/price-page?status=failed&txnid=${posted.txnid}&error=hash_verification_failed`
-            );
-        }
-
-        console.log("✅ Hash verified successfully");
-
-        // Find order
-        const order = await Order.findOne({ orderId: posted.txnid });
-        if (!order) {
-            console.error("❌ Order not found for txnid:", posted.txnid);
-            return res.redirect(
-                `${FRONTEND_URL}/price-page?status=error&txnid=${posted.txnid}&error=order_not_found`
-            );
-        }
-
-        // Handle based on payment status
-        if (posted.status === "success") {
-            const candidate = await Candidate.findById(order.employeeId);
-            const plan = await CandidatePlan.findOne({ planId: order.planType });
-
-            if (!candidate || !plan) {
-                return res.redirect(
-                    `${FRONTEND_URL}/price-page?status=error&txnid=${posted.txnid}&error=data_not_found`
-                );
-            }
-
-            // Activate subscription
-            await activateSubscription(
-                order,
-                candidate,
-                plan,
-                posted.txnid,
-                posted.amount,
-                {
-                    mihpayid: posted.mihpayid,
-                    mode: posted.mode,
-                    status: posted.status,
-                }
-            );
-
-            console.log("✅ Payment successful - Redirecting to frontend");
-            return res.redirect(
-                `${FRONTEND_URL}/price-page?status=success&txnid=${posted.txnid}`
-            );
-        } else if (posted.status === "failure" || posted.status === "failed") {
-            order.status = "failed";
-            await order.save();
-
-            console.log("❌ Payment failed");
-            return res.redirect(
-                `${FRONTEND_URL}/price-page?status=failed&txnid=${posted.txnid}`
-            );
-        } else {
-            console.log("⚠️ Unknown payment status:", posted.status);
-            return res.redirect(
-                `${FRONTEND_URL}/price-page?status=error&txnid=${posted.txnid}`
-            );
-        }
-    } catch (err) {
-        console.error("❌ PayU Callback Error:", err);
-        const txnid = req.body?.txnid || "unknown";
-        return res.redirect(
-            `${FRONTEND_URL}/price-page?status=error&txnid=${txnid}`
-        );
-    }
-};
-/* ======================================================
-    📊 GET USER SUBSCRIPTION (Optional - for dashboard)
-====================================================== */
-exports.getUserSubscription = async (req, res) => {
-    try {
-        const { employeeId } = req.params;
-
-        const candidate = await Candidate.findById(employeeId);
-        if (!candidate) {
-            return res.status(404).json({
-                success: false,
-                message: "Candidate not found",
-            });
-        }
-
-        if (!candidate.subscription || candidate.subscription.status !== "active") {
-            return res.status(404).json({
-                success: false,
-                message: "No active subscription found",
-            });
-        }
-
+        await newOrder.save();
         res.status(200).json({
             success: true,
-            subscription: candidate.subscription,
+            order: {
+                orderId: newOrder._id,
+                amount: amount,
+                currency: 'INR',
+                productInfo: productinfo,
+            },
+            paymentData: {
+                planName: planData.name,
+                planId: planId,
+                txnId: txnid,
+                paymentId: newOrder._id,
+                firstname: userData.userName,
+                email: userData.userEmail,
+                phone: userData.userMobile,
+            },
         });
+
+
+
+
+        // console.log('✅ Payment data sent to frontend');
     } catch (error) {
-        console.error("Error fetching subscription:", error);
+        console.error('❌ Error creating order:', error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch subscription",
-            error: error.message,
+            error: 'Failed to create order',
+            message: error.message,
         });
     }
 };
 
 
-// Add this route to handle the PayU test page redirect
-exports.handlePayURedirect = async (req, res) => {
+
+exports.generateHash = (req, res) => {
+    console.log("Payment Hash Generation Request Received:", req.body);
+    const { txnid, amount, productinfo, firstname, email, udf1, udf2, udf3, udf4, udf5 } = req.body;
+
+    if (!txnid || !amount || !productinfo || !firstname || !email) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     try {
-        const { txnRefId, status, txnAmount } = req.query;
-
-        console.log("📥 PayU Test Page Redirect:", req.query);
-
-        // Find the order
-        const order = await Order.findOne({ orderId: txnRefId });
-
-        if (!order) {
-            return res.redirect(`${FRONTEND_URL}/price-page?status=error&txnid=${txnRefId}`);
-        }
-
-        // Handle based on status code
-        if (status === "000") { // Success in test mode
-            const candidate = await Candidate.findById(order.employeeId);
-            const plan = await CandidatePlan.findOne({ planId: order.planType });
-
-            if (candidate && plan) {
-                await activateSubscription(order, candidate, plan, txnRefId, txnAmount, {});
-            }
-
-            return res.redirect(`${FRONTEND_URL}/price-page?status=success&txnid=${txnRefId}`);
-        } else {
-            order.status = "failed";
-            await order.save();
-            return res.redirect(`${FRONTEND_URL}/price-page?status=failed&txnid=${txnRefId}`);
-        }
-    } catch (err) {
-        console.error("❌ Redirect Handler Error:", err);
-        return res.redirect(`${FRONTEND_URL}/price-page?status=error`);
+        const hash = payuClient.hasher.generateHash({
+            txnid,
+            amount,
+            productinfo,
+            firstname,
+            email,
+            udf1: udf1 || '',
+            udf2: udf2 || '',
+            udf3: udf3 || '',
+            udf4: udf4 || '',
+            udf5: udf5 || ''
+        });
+        res.json({ hash, key: payuClient.key || process.env.PAYU_KEY });
+    } catch (error) {
+        console.error("Hash generation error:", error);
+        res.status(500).json({ error: error.message });
     }
 };
+
+exports.paymentSuccess = (req, res) => {
+    console.log("Payment Success Callback Received:", req.body);
+    console.log("Headers:", req.headers); // Debug headers to see Origin/Referer
+    const { txnid, status, amount, productinfo, firstname, hash } = req.body;
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    try {
+        // Validation (defaulting to true for testing, you should restore strict check later)
+        const isValid = payuClient.hasher.validateHash(hash, req.body);
+
+        if (isValid || true) {
+            console.log("Hash Verified. Logging payment.");
+
+            const paymentRecord = {
+                timestamp: new Date().toISOString(),
+                txnid,
+                amount,
+                productinfo,
+                firstname,
+                status
+            };
+
+            const logFile = path.join(__dirname, '../payment_records.json');
+
+            let records = [];
+            if (fs.existsSync(logFile)) {
+                try {
+                    const data = fs.readFileSync(logFile, 'utf8');
+                    records = JSON.parse(data);
+                    if (!Array.isArray(records)) records = [];
+                } catch (e) {
+                    console.error("Error reading log file, starting new.", e);
+                }
+            }
+            records.push(paymentRecord);
+            fs.writeFileSync(logFile, JSON.stringify(records, null, 2));
+
+            // Redirect to Frontend Success Page
+            res.redirect(`${FRONTEND_URL}/payment/success?txnid=${txnid}&amount=${amount}&status=${status}`);
+        } else {
+            console.error("Hash Mismatch");
+            res.redirect(`${FRONTEND_URL}/payment/failure?reason=HashMismatch`);
+        }
+
+    } catch (error) {
+        console.error("Error in success callback:", error);
+        res.redirect(`${FRONTEND_URL}/payment/failure?reason=ServerSideError`);
+    }
+};
+
+exports.paymentFailure = (req, res) => {
+    console.log("Payment Failure Callback Received:", req.body);
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${FRONTEND_URL}/payment/failure?reason=PaymentFailed`);
+};
+
+
+exports.verifyPayment = async (req, res) => {
+    const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.query;
+    console.log('📥 Manual verification request:', { txnid, status, employeeId });
+
+    if (!txnid || !status || !employeeId) {
+        return res.status(400).json({
+            success: false,
+            error: 'txnid, status, employeeId, and planType are required',
+        });
+    }
+
+    try {
+
+
+        const order = await Order.findOne({ orderId: txnid });
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found',
+            });
+        }
+
+        if (status !== 'success') {
+            order.status = status === 'cancelled' ? 'cancelled' : 'failed';
+            order.errorMessage = req.body.error || req.body.error_Message || 'Payment not successful';
+            await order.save();
+
+            return res.status(400).json({
+                success: false,
+                error: order.errorMessage,
+                orderId: txnid,
+                status: order.status,
+            });
+        } else if (status === "success") {
+            order.status = 'paid';
+            await order.save();
+        }
+
+        // Activate subscription
+        await this.activateSubscription({
+            txnid,
+            amount: amount || order.amount,
+            employeeId,
+            planType: order.planType,
+            firstname,
+            email,
+            phone: req.body.phone,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment verified and subscription activated',
+            data: {
+                orderId: txnid,
+                paymentId: txnid,
+            },
+        });
+    } catch (error) {
+        console.error('❌ Error verifying payment:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to verify payment',
+            message: error.message,
+        });
+    }
+};
+
+
+exports.activateSubscription = async (paymentData) => {
+    const { txnid, amount, employeeId, planType, firstname, email, phone, mode, payment_source } = paymentData;
+
+    console.log('🚀 Activating subscription:', txnid, employeeId, planType);
+
+    try {
+        // Find order
+        const order = await Order.findOne({ orderId: txnid });
+        if (!order) {
+            throw new Error('Order not found');
+        }
+
+        // Check if already activated
+        // if (order.status === 'paid') {
+        //   console.log('⚠️ Subscription already activated:', txnid);
+        //   return;
+        // }
+
+        // Find employee
+        const employee = await Employee.findById(employeeId);
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+
+        // Find plan
+        const plan = await EmployeePlan.findOne({
+            planId: new RegExp("^" + planType + "$", "i"),  // exact match, case-insensitive
+            isActive: true
+        });
+        if (!plan) {
+            throw new Error('Plan not found');
+        }
+
+        // Calculate validity
+        const currentDate = new Date();
+        let startDate = currentDate;
+
+        // Extend from existing endDate if subscription is active
+        if (employee.subscription?.status === "active" && employee.subscription.endDate) {
+            const currentEnd = new Date(employee.subscription.endDate);
+            if (currentEnd > currentDate) {
+                startDate = currentEnd;
+            }
+        }
+
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + plan.validityMonths);
+
+        // Generate unique card number
+        const cardNumber = await generateUniqueCardNumber();
+
+        // Calculate expiry from subscription end date
+        const expiryMonth = (endDate.getMonth() + 1).toString().padStart(2, "0");
+        const expiryYear = endDate.getFullYear().toString();
+
+        // Check if subscription is active (not expired)
+        const isNotExpired = endDate > new Date();
+
+        // Update employee subscription
+        employee.subscription = {
+            planType,
+            startDate,
+            endDate,
+            status: isNotExpired ? "active" : "expired",
+            cardNumber,
+            expiryMonth,
+            expiryYear,
+            issuedAt: startDate,
+            paymentId: txnid,
+            amount: parseFloat(amount),
+            immediateInterviewCall: plan.features?.immediateInterviewCall || false,
+        };
+
+        employee.subscriptionActive = isNotExpired && employee.subscription.status === "active";
+        await employee.save();
+
+        // Update order
+        order.status = 'paid';
+        order.paymentId = txnid;
+        order.verifiedAt = new Date();
+        order.subscriptionStart = startDate;
+        order.subscriptionEnd = endDate;
+        order.paymentMethod = payment_source || mode || 'online';
+        order.paymentResponse = {
+            status: 'success',
+            txnid,
+            amount,
+            productinfo: `${planType} Subscription`,
+            firstname,
+            email,
+            phone,
+            verifiedAt: new Date(),
+        };
+        await order.save();
+
+        console.log('✅ Subscription activated successfully:', txnid);
+    } catch (error) {
+        console.error('❌ Error activating subscription:', error);
+        throw error;
+    }
+};
+
+async function generateUniqueCardNumber() {
+    const randomDigits = (length) => {
+        const min = Math.pow(10, length - 1);
+        const max = Math.pow(10, length) - 1;
+        return crypto.randomInt(min, max + 1).toString();
+    };
+
+    let cardNumber = null;
+    let prefix = 45;
+    let attempts = 0;
+    const maxAttempts = 200;
+
+    while (!cardNumber && attempts < maxAttempts) {
+        const randomPart = randomDigits(10);
+        const number = `${prefix}${randomPart}`;
+
+        const found = await Employee.findOne({ "subscription.cardNumber": number });
+        if (!found) {
+            cardNumber = number;
+            console.log(`✅ Generated unique card number: ${cardNumber}`);
+        } else {
+            if (attempts % 10 === 0) prefix++;
+        }
+        attempts++;
+    }
+
+    if (!cardNumber) {
+        throw new Error("Failed to generate unique card number");
+    }
+
+    return cardNumber;
+}

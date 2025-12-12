@@ -6,14 +6,12 @@ const EmployeePlan = require('../../models/employeePlansSchema');
 // PayU Configuration
 const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '25UP9m';
 const PAYU_SALT = process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR';
-const PAYU_CLIENT_KEY = process.env.PAYU_CLIENT_KEY || 'f8c5c5dd367c0f9b37aa8d4eeca161d5da0d935b7ee354288c8e73daffc101a9';
-const PAYU_CLIENT_SECRET = process.env.PAYU_CLIENT_SECRET || 'd96786e86282837050c2e882053ebef929f06f58e1e1256a53e2c33724294926';
-// Default to PayU test environment if env not set
-const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://test.payu.in'; // set to https://secure.payu.in in production
+const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://test.payu.in';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 /**
  * Generate PayU payment hash
- * PayU requires hash in specific format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+ * Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
  */
 function generatePayUHash(params) {
   const hashString = [
@@ -28,105 +26,18 @@ function generatePayUHash(params) {
     params.udf3 || '',
     params.udf4 || '',
     params.udf5 || '',
-    '', // udf6
-    '', // udf7
-    '', // udf8
-    '', // udf9
-    '', // udf10
+    '', '', '', '', '', // udf6-10
   ].join('|') + '|' + PAYU_SALT;
-  
-  const hash = crypto
-    .createHash('sha512')
-    .update(hashString)
-    .digest('hex');
+
+  const hash = crypto.createHash('sha512').update(hashString).digest('hex');
+  console.log('🔐 Generated hash string:', hashString);
+  console.log('🔐 Generated hash:', hash);
   return hash;
 }
 
 /**
- * Create order for employee subscription
- * POST /employee/order/create
- */
-exports.createOrder = async (req, res) => {
-  const { amount, employeeId, planType, firstName, email, phone } = req.body;
-  console.log('📥 Received order request:', { amount, employeeId, planType });
-
-  if (!amount || !employeeId || !planType) {
-    return res.status(400).json({
-      success: false,
-      error: 'Amount, employeeId, and planType are required',
-    });
-  }
-
-  try {
-    // Generate unique transaction ID
-    const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
-    const productInfo = `${planType} Subscription`;
-    const amountNumber = Number(amount);
-    const amountFormatted = amountNumber.toFixed(2); // PayU expects 2-decimal format
-    
-    // Create order in database
-    const newOrder = new Order({
-      orderId: txnid,
-      amount: amountNumber,
-      currency: 'INR',
-      status: 'created',
-      employeeId,
-      planType,
-      type: 'employee_subscription',
-      createdAt: new Date(),
-    });
-
-    await newOrder.save();
-
-    // Generate PayU hash
-    const hashParams = {
-      key: PAYU_MERCHANT_KEY,
-      txnid: txnid,
-      amount: amountFormatted,
-      productinfo: productInfo,
-      firstname: firstName || 'Customer',
-      email: email || '',
-    };
-
-    const hash = generatePayUHash(hashParams);
-
-    console.log('✅ PayU order created:', txnid);
-    res.status(200).json({ 
-      success: true, 
-      order: {
-        id: txnid,
-        amount: amountFormatted,
-        currency: 'INR',
-        productInfo: productInfo,
-      },
-      paymentData: {
-        key: PAYU_MERCHANT_KEY,
-        txnid: txnid,
-        amount: amountFormatted,
-        productinfo: productInfo,
-        firstname: firstName || 'Customer',
-        email: email || '',
-        phone: phone || '',
-        surl: `${process.env.BASE_URL || 'http://localhost:3000'}/employee/order/success`,
-        furl: `${process.env.BASE_URL || 'http://localhost:3000'}/employee/order/failure`,
-        hash: hash,
-        service_provider: 'payu_paisa',
-        payuBaseUrl: PAYU_BASE_URL, // pass base URL so frontend form action matches env
-      },
-    });
-  } catch (error) {
-    console.error('❌ Error creating PayU order:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to create PayU order',
-      message: error.message,
-    });
-  }
-};
-
-/**
- * Verify PayU payment hash
- * PayU response hash format: status|udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key|SALT
+ * Verify PayU response hash
+ * Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
  */
 function verifyPayUHash(params, receivedHash) {
   const hashString = [
@@ -142,145 +53,267 @@ function verifyPayUHash(params, receivedHash) {
     params.amount || '',
     params.txnid || '',
     params.key || PAYU_MERCHANT_KEY,
-  ].join('|') + '|' + PAYU_SALT;
-  
+  ].reverse().join('|');
+
   const calculatedHash = crypto
     .createHash('sha512')
-    .update(hashString)
+    .update(PAYU_SALT + '|' + hashString)
     .digest('hex');
-  
-  return calculatedHash.toLowerCase() === receivedHash.toLowerCase();
+
+  const isValid = calculatedHash.toLowerCase() === receivedHash.toLowerCase();
+  console.log('🔐 Hash verification:', isValid ? '✅ Valid' : '❌ Invalid');
+  return isValid;
 }
 
 /**
- * Verify payment and activate subscription
- * POST /employee/order/verify
+ * Create order and generate payment hash
+ * POST /employee/order/create
  */
-exports.verifyPayment = async (req, res) => {
-  const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.body;
-  console.log('📥 Verifying PayU payment:', { txnid, status, employeeId, planType });
+exports.createOrder = async (req, res) => {
+  const { amount, employeeId, planType, firstname, email, phone, txnid } = req.body;
+  console.log('📥 Create order request:', { amount, employeeId, planType, txnid });
 
-  if (!txnid || !status || !employeeId || !planType) {
+  if (!amount || !employeeId || !planType) {
     return res.status(400).json({
       success: false,
-      error: 'txnid, status, employeeId, and planType are required',
+      error: 'Amount, employeeId, and planType are required',
     });
   }
-  
-  // Hash is optional but recommended for security
-  const paymentHash = hash || '';
 
   try {
-    // Verify hash if provided (recommended for security)
-    if (paymentHash) {
+    // Use provided txnid or generate new one
+    const transactionId = txnid || `TXN${Date.now()}${employeeId.substring(0, 5)}`;
+    const productInfo = `${planType} Subscription`;
+    const amountFormatted = Number(amount).toFixed(2);
+
+    // Check if order already exists
+    const existingOrder = await Order.findOne({ orderId: transactionId });
+    if (existingOrder) {
+      console.log('⚠️ Order already exists:', transactionId);
+      return res.status(400).json({
+        success: false,
+        error: 'Order already exists',
+      });
+    }
+
+    // Create order in database
+    const newOrder = new Order({
+      orderId: transactionId,
+      amount: Number(amount),
+      currency: 'INR',
+      status: 'pending',
+      employeeId,
+      planType,
+      type: 'employee_subscription',
+      createdAt: new Date(),
+    });
+
+    await newOrder.save();
+    console.log('✅ Order created in database:', transactionId);
+
+    // Generate PayU hash with UDF fields
+    const hashParams = {
+      key: PAYU_MERCHANT_KEY,
+      txnid: transactionId,
+      amount: amountFormatted,
+      productinfo: productInfo,
+      firstname: firstname || 'Customer',
+      email: email || '',
+      udf1: employeeId,     // Store employeeId for verification
+      udf2: planType,       // Store planType for verification
+      udf3: '',
+      udf4: '',
+      udf5: '',
+    };
+
+    const hash = generatePayUHash(hashParams);
+
+    // Return payment data to frontend
+    res.status(200).json({
+      success: true,
+      order: {
+        id: transactionId,
+        amount: amountFormatted,
+        currency: 'INR',
+        productInfo: productInfo,
+      },
+      paymentData: {
+        key: PAYU_MERCHANT_KEY,
+        txnid: transactionId,
+        amount: amountFormatted,
+        productinfo: productInfo,
+        firstname: firstname || 'Customer',
+        email: email || '',
+        phone: phone || '',
+        // Frontend success/failure URLs
+        surl: `${FRONTEND_URL}/payment/success?txnid=${transactionId}`,
+        furl: `${FRONTEND_URL}/payment/failure?txnid=${transactionId}`,
+        hash: hash,
+        service_provider: 'payu_paisa',
+        udf1: employeeId,
+        udf2: planType,
+        udf3: '',
+        udf4: '',
+        udf5: '',
+        payuBaseUrl: PAYU_BASE_URL,
+      },
+    });
+
+    console.log('✅ Payment data sent to frontend');
+  } catch (error) {
+    console.error('❌ Error creating order:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create order',
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * PayU Callback Handler (Webhook)
+ * POST /employee/order/payu-callback
+ * This receives payment response from PayU
+ */
+exports.payuCallback = async (req, res) => {
+  console.log('📥 PayU Callback received:', req.body);
+
+  const {
+    txnid,
+    status,
+    hash,
+    amount,
+    productinfo,
+    firstname,
+    email,
+    phone,
+    udf1: employeeId,
+    udf2: planType,
+    error: errorMessage,
+    error_Message,
+    mode,
+    payment_source,
+  } = req.body;
+
+  try {
+    // Verify hash
+    if (hash) {
       const hashParams = {
         key: PAYU_MERCHANT_KEY,
-        txnid: txnid,
+        txnid,
         amount: amount || '',
         productinfo: productinfo || '',
         firstname: firstname || '',
         email: email || '',
-        status: status,
-        udf1: '',
-        udf2: '',
+        status,
+        udf1: employeeId || '',
+        udf2: planType || '',
         udf3: '',
         udf4: '',
         udf5: '',
       };
 
-      if (!verifyPayUHash(hashParams, paymentHash)) {
-        console.log('❌ Invalid PayU hash');
-        // Still proceed if status is success, but log the warning
-        if (status !== 'success') {
-          return res.status(400).json({
-            success: false,
-            error: 'Invalid payment hash',
-          });
-        }
+      if (!verifyPayUHash(hashParams, hash)) {
+        console.log('❌ Invalid hash in callback');
+        return res.redirect(
+          `${FRONTEND_URL}/payment/failure?txnid=${txnid}&error=${encodeURIComponent('Invalid payment signature')}`
+        );
       }
     }
 
-    // Find order first (needed for both success and failure cases)
+    // Find order
     const order = await Order.findOne({ orderId: txnid });
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: 'Order not found',
-      });
+      console.log('❌ Order not found:', txnid);
+      return res.redirect(
+        `${FRONTEND_URL}/payment/failure?txnid=${txnid}&error=${encodeURIComponent('Order not found')}`
+      );
     }
 
-    // Check payment status
-    if (status !== 'success') {
+    // Handle based on status
+    if (status === 'success') {
+      console.log('✅ Payment successful:', txnid);
+
+      // Verify and activate subscription
+      await this.activateSubscription({
+        txnid,
+        amount,
+        employeeId: employeeId || order.employeeId,
+        planType: planType || order.planType,
+        firstname,
+        email,
+        phone,
+        mode,
+        payment_source,
+      });
+
+      return res.redirect(
+        `${FRONTEND_URL}/payment/success?txnid=${txnid}&amount=${amount}&planType=${planType || order.planType}`
+      );
+    } else {
+      // Payment failed or cancelled
       console.log('❌ Payment not successful:', status);
-      
-      // Determine order status based on payment status
+
       let orderStatus = 'failed';
-      if (status === 'cancelled') {
-        orderStatus = 'cancelled';
-      }
-      
-      // Update order status and store payment details
+      if (status === 'cancelled') orderStatus = 'cancelled';
+
       order.status = orderStatus;
-      order.paymentResponse = {
-        status: status,
-        txnid: txnid,
-        amount: amount || order.amount,
-        productinfo: productinfo || '',
-        firstname: firstname || '',
-        email: email || '',
-        error: req.body.error || req.body.error_Message || (status === 'cancelled' ? 'Payment cancelled by user' : 'Payment failed'),
-        verifiedAt: new Date(),
-      };
-      order.errorMessage = req.body.error || req.body.error_Message || (status === 'cancelled' ? 'Payment cancelled by user' : 'Payment not successful');
+      order.errorMessage = errorMessage || error_Message || 'Payment not successful';
+      order.paymentResponse = req.body;
       order.verifiedAt = new Date();
       await order.save();
-      console.log(`📝 Order status updated to ${orderStatus}:`, txnid);
-      
-      return res.status(400).json({
-        success: false,
-        error: status === 'cancelled' ? 'Payment cancelled' : 'Payment not successful',
-        orderId: txnid,
-        status: orderStatus,
-      });
+
+      return res.redirect(
+        `${FRONTEND_URL}/payment/failure?txnid=${txnid}&status=${status}&error=${encodeURIComponent(order.errorMessage)}`
+      );
+    }
+  } catch (error) {
+    console.error('❌ Error in PayU callback:', error);
+    return res.redirect(
+      `${FRONTEND_URL}/payment/failure?txnid=${txnid}&error=${encodeURIComponent('System error occurred')}`
+    );
+  }
+};
+
+/**
+ * Activate subscription after successful payment
+ * Internal function called by payuCallback
+ */
+exports.activateSubscription = async (paymentData) => {
+  const { txnid, amount, employeeId, planType, firstname, email, phone, mode, payment_source } = paymentData;
+
+  console.log('🚀 Activating subscription:', { txnid, employeeId, planType });
+
+  try {
+    // Find order
+    const order = await Order.findOne({ orderId: txnid });
+    if (!order) {
+      throw new Error('Order not found');
     }
 
-    // Check if already paid
+    // Check if already activated
     if (order.status === 'paid') {
-      return res.status(200).json({
-        success: true,
-        message: 'Payment already verified',
-        data: {
-          orderId: txnid,
-          paymentId: order.paymentId,
-        },
-      });
+      console.log('⚠️ Subscription already activated:', txnid);
+      return;
     }
 
-    // Activate subscription
-    const subscriptionController = require('./subscriptionController');
-    
+    // Find employee
     const employee = await Employee.findById(employeeId);
     if (!employee) {
-      return res.status(404).json({
-        success: false,
-        error: 'Employee not found',
-      });
+      throw new Error('Employee not found');
     }
 
+    // Find plan
     const plan = await EmployeePlan.findOne({ planId: planType, isActive: true });
     if (!plan) {
-      return res.status(404).json({
-        success: false,
-        error: 'Plan not found',
-      });
+      throw new Error('Plan not found');
     }
 
-    // Calculate validity period
+    // Calculate validity
     const currentDate = new Date();
-    const validityMonths = plan.validityMonths;
-
-    // If user already has an active subscription, extend from existing endDate; otherwise start from today
     let startDate = currentDate;
+
+    // Extend from existing endDate if subscription is active
     if (employee.subscription?.status === "active" && employee.subscription.endDate) {
       const currentEnd = new Date(employee.subscription.endDate);
       if (currentEnd > currentDate) {
@@ -289,108 +322,179 @@ exports.verifyPayment = async (req, res) => {
     }
 
     const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + validityMonths);
-    const finalAmount = parseFloat(amount || order.amount);
+    endDate.setMonth(endDate.getMonth() + plan.validityMonths);
 
-    // Update order status to paid and store payment details (after dates computed)
-    order.status = 'paid';
-    order.paymentId = txnid;
-    order.verifiedAt = new Date();
-    order.paymentResponse = {
-      status: status,
-      txnid: txnid,
-      amount: amount || order.amount,
-      productinfo: productinfo || '',
-      firstname: firstname || '',
-      email: email || '',
-      verifiedAt: new Date(),
-    };
-    // Store validity on the order for history display
-    order.subscriptionStart = startDate;
-    order.subscriptionEnd = endDate;
-    // Extract payment method from PayU response if available
-    if (req.body.payment_source) {
-      order.paymentMethod = req.body.payment_source;
-    } else if (req.body.mode) {
-      order.paymentMethod = req.body.mode;
-    }
-    await order.save();
-    console.log('📝 Order status updated to paid:', txnid);
-
-    // Generate unique card number automatically
-    // Format: 45 + 10 random digits = 12 digits total
-    const generateUniqueCardNumber = async () => {
-      const randomDigits = (length) => {
-        const min = Math.pow(10, length - 1);
-        const max = Math.pow(10, length) - 1;
-        return crypto.randomInt(min, max + 1).toString();
-      };
-
-      let cardNumber = null;
-      let prefix = 45;
-      let exists = true;
-      let attempts = 0;
-      const maxAttempts = 200; // Increased attempts for better reliability
-
-      while (exists && attempts < maxAttempts) {
-        // Generate: prefix (45) + 10 random digits = 12 digit card number
-        const randomPart = randomDigits(10);
-        const number = `${prefix}${randomPart}`;
-        
-        // Check if this card number already exists
-        const found = await Employee.findOne({ "subscription.cardNumber": number });
-        if (!found) {
-          cardNumber = number;
-          exists = false;
-          console.log(`✅ Generated unique card number: ${cardNumber} (attempt ${attempts + 1})`);
-        } else {
-          // If exists, try with incremented prefix or new random part
-          if (attempts % 10 === 0) {
-            prefix++;
-          }
-        }
-        attempts++;
-      }
-
-      if (!cardNumber) {
-        console.error('❌ Failed to generate unique card number after', maxAttempts, 'attempts');
-        throw new Error("Failed to generate unique card number. Please try again.");
-      }
-
-      return cardNumber;
-    };
-
+    // Generate unique card number
     const cardNumber = await generateUniqueCardNumber();
-    
-    // Calculate expiry month and year automatically based on subscription end date
-    // The card expires when the subscription ends
-    const expiryMonth = (endDate.getMonth() + 1).toString().padStart(2, "0"); // +1 because getMonth() returns 0-11
+
+    // Calculate expiry from subscription end date
+    const expiryMonth = (endDate.getMonth() + 1).toString().padStart(2, "0");
     const expiryYear = endDate.getFullYear().toString();
 
-    // Check if subscription end date is in the future (not expired)
-    const checkDate = new Date();
-    const isNotExpired = endDate > checkDate;
-    
-    // Update subscription
+    // Check if subscription is active (not expired)
+    const isNotExpired = endDate > new Date();
+
+    // Update employee subscription
     employee.subscription = {
       planType,
       startDate,
       endDate,
       status: isNotExpired ? "active" : "expired",
       cardNumber,
-      expiryMonth: expiryMonth, // Automatically calculated from endDate
-      expiryYear: expiryYear, // Automatically calculated from endDate
+      expiryMonth,
+      expiryYear,
       issuedAt: startDate,
       paymentId: txnid,
-      amount: finalAmount,
+      amount: parseFloat(amount),
       immediateInterviewCall: plan.features?.immediateInterviewCall || false,
     };
-    
-    // Only set subscriptionActive to true if subscription is active AND not expired
-    employee.subscriptionActive = isNotExpired && employee.subscription.status === "active";
 
+    employee.subscriptionActive = isNotExpired && employee.subscription.status === "active";
     await employee.save();
-    console.log('✅ Subscription activated successfully');
+
+    // Update order
+    order.status = 'paid';
+    order.paymentId = txnid;
+    order.verifiedAt = new Date();
+    order.subscriptionStart = startDate;
+    order.subscriptionEnd = endDate;
+    order.paymentMethod = payment_source || mode || 'online';
+    order.paymentResponse = {
+      status: 'success',
+      txnid,
+      amount,
+      productinfo: `${planType} Subscription`,
+      firstname,
+      email,
+      phone,
+      verifiedAt: new Date(),
+    };
+    await order.save();
+
+    console.log('✅ Subscription activated successfully:', txnid);
+  } catch (error) {
+    console.error('❌ Error activating subscription:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generate unique card number
+ */
+async function generateUniqueCardNumber() {
+  const randomDigits = (length) => {
+    const min = Math.pow(10, length - 1);
+    const max = Math.pow(10, length) - 1;
+    return crypto.randomInt(min, max + 1).toString();
+  };
+
+  let cardNumber = null;
+  let prefix = 45;
+  let attempts = 0;
+  const maxAttempts = 200;
+
+  while (!cardNumber && attempts < maxAttempts) {
+    const randomPart = randomDigits(10);
+    const number = `${prefix}${randomPart}`;
+
+    const found = await Employee.findOne({ "subscription.cardNumber": number });
+    if (!found) {
+      cardNumber = number;
+      console.log(`✅ Generated unique card number: ${cardNumber}`);
+    } else {
+      if (attempts % 10 === 0) prefix++;
+    }
+    attempts++;
+  }
+
+  if (!cardNumber) {
+    throw new Error("Failed to generate unique card number");
+  }
+
+  return cardNumber;
+}
+
+/**
+ * Verify payment (called from frontend or for manual verification)
+ * POST /employee/order/verify
+ */
+exports.verifyPayment = async (req, res) => {
+  const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.body;
+  console.log('📥 Manual verification request:', { txnid, status, employeeId });
+
+  if (!txnid || !status || !employeeId || !planType) {
+    return res.status(400).json({
+      success: false,
+      error: 'txnid, status, employeeId, and planType are required',
+    });
+  }
+
+  try {
+    // Verify hash if provided
+    if (hash) {
+      const hashParams = {
+        key: PAYU_MERCHANT_KEY,
+        txnid,
+        amount: amount || '',
+        productinfo: productinfo || '',
+        firstname: firstname || '',
+        email: email || '',
+        status,
+        udf1: employeeId,
+        udf2: planType,
+        udf3: '',
+        udf4: '',
+        udf5: '',
+      };
+
+      if (!verifyPayUHash(hashParams, hash)) {
+        console.log('❌ Invalid hash');
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid payment hash',
+        });
+      }
+    }
+
+    const order = await Order.findOne({ orderId: txnid });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found',
+      });
+    }
+
+    if (status !== 'success') {
+      order.status = status === 'cancelled' ? 'cancelled' : 'failed';
+      order.errorMessage = req.body.error || req.body.error_Message || 'Payment not successful';
+      await order.save();
+
+      return res.status(400).json({
+        success: false,
+        error: order.errorMessage,
+        orderId: txnid,
+        status: order.status,
+      });
+    }
+
+    if (order.status === 'paid') {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified',
+        data: { orderId: txnid, paymentId: order.paymentId },
+      });
+    }
+
+    // Activate subscription
+    await this.activateSubscription({
+      txnid,
+      amount: amount || order.amount,
+      employeeId,
+      planType,
+      firstname,
+      email,
+      phone: req.body.phone,
+    });
 
     return res.status(200).json({
       success: true,
@@ -398,18 +502,12 @@ exports.verifyPayment = async (req, res) => {
       data: {
         orderId: txnid,
         paymentId: txnid,
-        subscription: {
-          planType: employee.subscription.planType,
-          endDate: employee.subscription.endDate,
-          immediateInterviewCall: employee.subscription.immediateInterviewCall,
-          cardNumber: employee.subscription.cardNumber,
-        },
       },
     });
   } catch (error) {
     console.error('❌ Error verifying payment:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: 'Failed to verify payment',
       message: error.message,
     });
@@ -424,19 +522,22 @@ exports.getEmployeeOrders = async (req, res) => {
   try {
     const { employeeId } = req.params;
     if (!employeeId) {
-      return res.status(400).json({ success: false, message: 'employeeId is required' });
+      return res.status(400).json({
+        success: false,
+        message: 'employeeId is required'
+      });
     }
 
     const orders = await Order.find({ employeeId })
       .sort({ createdAt: -1 })
-      .select('orderId paymentId amount currency status planType paymentMethod errorMessage verifiedAt createdAt paymentResponse subscriptionStart subscriptionEnd');
+      .select('orderId paymentId amount currency status planType paymentMethod errorMessage verifiedAt createdAt subscriptionStart subscriptionEnd');
 
     return res.status(200).json({
       success: true,
       data: orders,
     });
   } catch (error) {
-    console.error('❌ Error fetching employee orders:', error);
+    console.error('❌ Error fetching orders:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch payment history',
@@ -445,3 +546,29 @@ exports.getEmployeeOrders = async (req, res) => {
   }
 };
 
+
+exports.clearAllTransactions = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    if (!candidateId) {
+      return res.status(400).json({
+        success: false,
+        message: 'candidateId is required'
+      });
+    }
+
+    const orders = await Order.deleteMany({ employeeId: candidateId });
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching orders:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch payment history',
+      error: error.message,
+    });
+  }
+};

@@ -10,7 +10,7 @@ exports.getPricingPlans = async (req, res) => {
     
     // Transform to match frontend expected format
     const formattedPlans = plans.map(plan => ({
-      id: plan.planId,
+      id: plan._id,
       name: plan.name,
       price: plan.price,
       amount: plan.amount,

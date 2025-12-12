@@ -25,13 +25,14 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const allowedOrigins = ["http://localhost:5174", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in"];
+const allowedOrigins = ["http://localhost:5174", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com"];
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Check if origin is in allow list or if it is undefined (direct server to server or local tool) or "null" (some redirect scenarios)
+    if (!origin || allowedOrigins.includes(origin) || origin === "null") {
       callback(null, true);
     } else {
-      console.error(`CORS error for origin: ${origin}`);
+      console.error(`Blocked by CORS: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -47,6 +48,7 @@ app.use("/employer", employerRoute);
 app.use("/employeradmin", employeradminRoute);
 app.use("/admin", mainadminRoute);
 app.use("/payment", paymentRoute);
+app.use('/api', paymentRoute);
 // 404 Route Handling
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });

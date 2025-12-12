@@ -5,7 +5,7 @@ const employeePlanSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    enum: ["starter", "premium", "special", "silver", "gold", "platinum"] // Support both old and new plans
+
   },
   name: {
     type: String,
@@ -64,22 +64,22 @@ const employeePlanSchema = new mongoose.Schema({
   },
   documentVerificationLevel: {
     type: String,
-    enum: ["standard", "advanced", "tailored"],
+
     default: "standard"
   },
   eProfileType: {
     type: String,
-    enum: ["standard", "premium-verified", "personalized"],
+
     default: "standard"
   },
   profileVisibility: {
     type: String,
-    enum: ["standard", "priority", "highest"],
+
     default: "standard"
   },
   accountSupport: {
     type: String,
-    enum: ["standard", "premium", "dedicated"],
+
     default: "standard"
   },
   // Features list for display
@@ -90,9 +90,9 @@ const employeePlanSchema = new mongoose.Schema({
   // Legacy features (for backward compatibility)
   features: {
     applyToJobs: { type: Boolean, default: true },
-    priorityToRecruiters: { 
-      type: String, 
-      enum: ["none", "medium", "highest"],
+    priorityToRecruiters: {
+      type: String,
+
       default: "none"
     },
     immediateInterviewCall: { type: Boolean, default: false },
@@ -117,7 +117,7 @@ const employeePlanSchema = new mongoose.Schema({
 });
 
 // Update updatedAt before saving
-employeePlanSchema.pre('save', function(next) {
+employeePlanSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });

@@ -23,7 +23,7 @@ const workExperienceSchema = new mongoose.Schema({
 const mediaSchema = new mongoose.Schema({
   name: String,
   url: String,
-  type: { type: String, enum: ["audio", "video", "image"] },
+  type: { type: String,  },
   duration: Number, // in seconds (for audio/video)
   thumbnail: String, // video thumbnail
   createdAt: { type: Date, default: Date.now },
@@ -50,7 +50,7 @@ const employeeSchema = new mongoose.Schema({
 
   // 👤 Personal Info
   userName: String,
-  gender: { type: String, enum: ["Male", "Female", "Others"] },
+  gender: { type: String, },
   dob: String, // DD/MM/YYYY
   maritalStatus: String,
   languages: [String],
@@ -137,14 +137,14 @@ const employeeSchema = new mongoose.Schema({
   subscription: {
     planType: { 
       type: String, 
-      enum: ["silver", "gold", "platinum", "starter", "premium", "special"], 
+    
       default: "silver" 
     },
     startDate: Date,
     endDate: Date,
     status: { 
       type: String, 
-      enum: ["active", "expired", "cancelled"], 
+
       default: "expired" 
     },
     cardNumber: String,

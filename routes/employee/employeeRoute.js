@@ -94,7 +94,10 @@ employeeRoute.get("/get-jobs-by-type/:jobType", employeeController.getFeaturedJo
 employeeRoute.get("/get-all-blogs", employeeController.getAllBlogs);
 employeeRoute.get("/get-distict-category-location", employeeController.getDistinctCategoryLocation);
 employeeRoute.get("/get-random-blogs", employeeController.getRandomBlogs);
-
+employeeRoute.get("/get-candidate-transaction-history/:employeeId", orderController.getEmployeeOrders);
+employeeRoute.get("/get-job-storm-card-data/:employeeId", employeeController.getJobStormCardData);
+employeeRoute.get("/is-candidate-subscribed/:employeeId", employeeController.isCandidateSubscribed);
+employeeRoute.get("/get-candidate-dashboard-data/:candidateId", employeeController.geCandidateDashboardData);
 
 employeeRoute.get("/fetchallemployee", employeeController.getAllEmployees);
 employeeRoute.get("/fetchemployee/:id", employeeController.getEmployeeDetails);
@@ -253,6 +256,9 @@ employeeRoute.put(
 // ====================================================
 // Example:
 // employeeRoute.delete("/delete/:id", employeeController.deleteEmployee);
+
+employeeRoute.delete("/clear-all-transactions/:candidateId", orderController.clearAllTransactions);
+
 
 // ====================================================
 // EXPORT ROUTER

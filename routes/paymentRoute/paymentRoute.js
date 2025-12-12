@@ -1,17 +1,18 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const paymentController = require("../../controller/employeeController/paymentController");
+const paymentController = require('../../controller/employeeController/paymentController');
 
-// Create order (initiate payment)
-router.post("/create-order", paymentController.createOrder);
 
-// ✅ Single unified callback for both success and failure
-router.post("/payu/callback", paymentController.handlePayUCallback);
+router.post('/create-order', paymentController.createOrder);
+router.get('/verify-payment', paymentController.verifyPayment);
 
-// Get user subscription (optional)
-router.get("/subscription/:employeeId", paymentController.getUserSubscription);
+// Route to generate hash
+router.post('/generate-hash', paymentController.generateHash);
 
-router.get("/payu/redirect", paymentController.handlePayURedirect);
+// Route for success callback
+router.post('/success', paymentController.paymentSuccess);
 
+// Route for failure callback
+router.post('/failure', paymentController.paymentFailure);
 
 module.exports = router;
