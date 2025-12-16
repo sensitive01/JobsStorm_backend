@@ -83,6 +83,7 @@ const jobSchema = new mongoose.Schema(
     companyAddress: { type: String },
     locationTypes: { type: [String], default: [] }, // On-site, Remote, Hybrid
     isRemote: { type: Boolean, default: false },
+    region: { type: String }, // Middle East, Europe, Asia
 
     // Benefits & Skills
     benefits: { type: String },
@@ -101,7 +102,6 @@ const jobSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
-    region:{type:String}
   },
   { timestamps: true }
 ); // auto-manage createdAt and updatedAt
