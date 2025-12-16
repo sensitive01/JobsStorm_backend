@@ -193,6 +193,10 @@ employeeRoute.post(
     { name: "userProfilePic", maxCount: 1 },
     { name: "resume", maxCount: 1 },
     { name: "coverLetterFile", maxCount: 1 },
+    { name: "passport", maxCount: 1 },
+    { name: "educationCertificate", maxCount: 1 },
+    { name: "policeClearance", maxCount: 1 },
+    { name: "mofaAttestation", maxCount: 1 },
   ]),
   employeeController.editUserData
 );

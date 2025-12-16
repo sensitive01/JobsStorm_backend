@@ -1484,6 +1484,35 @@ const editUserData = async (req, res) => {
       };
     }
 
+    if (req.files.passport) {
+      updateData.passport = {
+        name: req.files.passport[0].originalname,
+        url: `/uploads/${req.files.passport[0].filename}`,
+        expiryDate: body.passportExpiryDate,
+      };
+    }
+
+    if (req.files.educationCertificate) {
+      updateData.educationCertificate = {
+        name: req.files.educationCertificate[0].originalname,
+        url: `/uploads/${req.files.educationCertificate[0].filename}`,
+      };
+    }
+
+    if (req.files.policeClearance) {
+      updateData.policeClearance = {
+        name: req.files.policeClearance[0].originalname,
+        url: `/uploads/${req.files.policeClearance[0].filename}`,
+      };
+    }
+
+    if (req.files.mofaAttestation) {
+      updateData.mofaAttestation = {
+        name: req.files.mofaAttestation[0].originalname,
+        url: `/uploads/${req.files.mofaAttestation[0].filename}`,
+      };
+    }
+
     // Update employee document in MongoDB
     const updatedEmployee = await Employee.findByIdAndUpdate(
       userId,

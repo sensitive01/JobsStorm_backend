@@ -23,7 +23,7 @@ const workExperienceSchema = new mongoose.Schema({
 const mediaSchema = new mongoose.Schema({
   name: String,
   url: String,
-  type: { type: String,  },
+  type: { type: String, },
   duration: Number, // in seconds (for audio/video)
   thumbnail: String, // video thumbnail
   createdAt: { type: Date, default: Date.now },
@@ -96,6 +96,25 @@ const employeeSchema = new mongoose.Schema({
     url: String,
   },
 
+  // 📜 Verified Documents
+  passport: {
+    name: String,
+    url: String,
+    expiryDate: String,
+  },
+  educationCertificate: {
+    name: String,
+    url: String,
+  },
+  policeClearance: {
+    name: String,
+    url: String,
+  },
+  mofaAttestation: {
+    name: String,
+    url: String,
+  },
+
   // 🖼️ Media (Audio / Video / Image)
   audioFiles: [mediaSchema],
   videoFiles: [mediaSchema],
@@ -135,17 +154,17 @@ const employeeSchema = new mongoose.Schema({
 
   // 💳 Subscription System
   subscription: {
-    planType: { 
-      type: String, 
-    
-      default: "silver" 
+    planType: {
+      type: String,
+
+      default: "silver"
     },
     startDate: Date,
     endDate: Date,
-    status: { 
-      type: String, 
+    status: {
+      type: String,
 
-      default: "expired" 
+      default: "expired"
     },
     cardNumber: String,
     expiryMonth: String,
