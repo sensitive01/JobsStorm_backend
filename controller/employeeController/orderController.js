@@ -118,14 +118,19 @@ exports.createOrder = async (req, res) => {
     await newOrder.save();
     console.log('✅ Order created in database:', transactionId);
 
+    // Sanitize and default inputs
+    const sanitizedFirstname = (firstname || 'Customer').trim();
+    const sanitizedEmail = (email || 'guest@jobsstorm.com').trim();
+    const sanitizedPhone = (phone || '9999999999').trim();
+
     // Generate PayU hash with UDF fields
     const hashParams = {
       key: PAYU_MERCHANT_KEY,
       txnid: transactionId,
       amount: amountFormatted,
       productinfo: productInfo,
-      firstname: firstname || 'Customer',
-      email: email || '',
+      firstname: sanitizedFirstname,
+      email: sanitizedEmail,
       udf1: employeeId,     // Store employeeId for verification
       udf2: planType,       // Store planType for verification
       udf3: '',
@@ -149,9 +154,9 @@ exports.createOrder = async (req, res) => {
         txnid: transactionId,
         amount: amountFormatted,
         productinfo: productInfo,
-        firstname: firstname || 'Customer',
-        email: email || '',
-        phone: phone || '',
+        firstname: sanitizedFirstname,
+        email: sanitizedEmail,
+        phone: sanitizedPhone,
         // Frontend success/failure URLs
         surl: `${FRONTEND_URL}/payment/success?txnid=${transactionId}`,
         furl: `${FRONTEND_URL}/payment/failure?txnid=${transactionId}`,
