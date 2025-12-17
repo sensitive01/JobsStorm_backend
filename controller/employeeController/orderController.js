@@ -4,10 +4,17 @@ const Employee = require('../../models/employeeschema');
 const EmployeePlan = require('../../models/employeePlansSchema');
 
 // PayU Configuration
-const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '25UP9m';
-const PAYU_SALT = process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR';
-const PAYU_BASE_URL = process.env.PAYU_BASE_URL || 'https://test.payu.in';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// PayU Configuration
+const PAYU_MERCHANT_KEY = (process.env.PAYU_KEY || process.env.PAYU_MERCHANT_KEY || '25UP9m').trim();
+const PAYU_SALT = (process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR').trim();
+const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://test.payu.in').trim();
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').trim();
+
+// Log PayU Configuration (Safe check)
+console.log('🔧 PayU Config Loaded:');
+console.log(`   - Key: ${PAYU_MERCHANT_KEY.substring(0, 2)}****${PAYU_MERCHANT_KEY.substring(PAYU_MERCHANT_KEY.length - 2)}`);
+console.log(`   - Salt: ${PAYU_SALT.substring(0, 2)}****${PAYU_SALT.substring(PAYU_SALT.length - 2)}`);
+console.log(`   - Base URL: ${PAYU_BASE_URL}`);
 
 /**
  * Generate PayU payment hash
