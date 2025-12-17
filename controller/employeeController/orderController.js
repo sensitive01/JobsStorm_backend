@@ -21,6 +21,7 @@ console.log(`   - Base URL: ${PAYU_BASE_URL}`);
  * Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
  */
 function generatePayUHash(params) {
+  // Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
   const hashString = [
     params.key,
     params.txnid,
@@ -33,8 +34,13 @@ function generatePayUHash(params) {
     params.udf3 || '',
     params.udf4 || '',
     params.udf5 || '',
-    '', '', '', '', '', // udf6-10
-  ].join('|') + '|' + PAYU_SALT;
+    '', // udf6
+    '', // udf7
+    '', // udf8
+    '', // udf9
+    '', // udf10
+    PAYU_SALT
+  ].join('|');
 
   const hash = crypto.createHash('sha512').update(hashString).digest('hex');
   console.log('🔐 Generated hash string:', hashString);
@@ -47,8 +53,11 @@ function generatePayUHash(params) {
  * Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
  */
 function verifyPayUHash(params, receivedHash) {
+  // Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
   const hashString = [
+    PAYU_SALT,
     params.status || '',
+    '', '', '', // Empty fields
     params.udf5 || '',
     params.udf4 || '',
     params.udf3 || '',
@@ -59,15 +68,16 @@ function verifyPayUHash(params, receivedHash) {
     params.productinfo || '',
     params.amount || '',
     params.txnid || '',
-    params.key || PAYU_MERCHANT_KEY,
-  ].reverse().join('|');
+    params.key || PAYU_MERCHANT_KEY
+  ].join('|');
 
   const calculatedHash = crypto
     .createHash('sha512')
-    .update(PAYU_SALT + '|' + hashString)
-    .digest('hex');
+    .update(hashString)
+    .digest('hex')
+    .toLowerCase();
 
-  const isValid = calculatedHash.toLowerCase() === receivedHash.toLowerCase();
+  const isValid = calculatedHash === (receivedHash || '').toLowerCase();
   console.log('🔐 Hash verification:', isValid ? '✅ Valid' : '❌ Invalid');
   return isValid;
 }
