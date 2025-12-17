@@ -21,30 +21,51 @@ console.log(`   - Base URL: ${PAYU_BASE_URL}`);
  * Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
  */
 function generatePayUHash(params) {
-  // Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+  // Ensure all parameters are strings and handle undefined/null cases
+  const key = String(params.key || '');
+  const txnid = String(params.txnid || '');
+  const amount = Number(params.amount).toFixed(2); // Ensure 2 decimal places
+  const productinfo = String(params.productinfo || '');
+  const firstname = String(params.firstname || '');
+  const email = String(params.email || '');
+  const udf1 = String(params.udf1 || '');
+  const udf2 = String(params.udf2 || '');
+  const udf3 = String(params.udf3 || '');
+  const udf4 = String(params.udf4 || '');
+  const udf5 = String(params.udf5 || '');
+  const salt = String(PAYU_SALT || '');
+
+  // Build the hash string in the exact order required by PayU
   const hashString = [
-    params.key,
-    params.txnid,
-    params.amount,
-    params.productinfo,
-    params.firstname,
-    params.email,
-    params.udf1 || '',
-    params.udf2 || '',
-    params.udf3 || '',
-    params.udf4 || '',
-    params.udf5 || '',
+    key,
+    txnid,
+    amount,
+    productinfo,
+    firstname,
+    email,
+    udf1,
+    udf2,
+    udf3,
+    udf4,
+    udf5,
     '', // udf6
     '', // udf7
     '', // udf8
     '', // udf9
     '', // udf10
-    PAYU_SALT
+    salt
   ].join('|');
 
-  console.log('🔐 Hash String:', hashString); // Add this for debugging
-  const hash = crypto.createHash('sha512').update(hashString).digest('hex');
-  console.log('🔐 Generated hash:', hash);
+  console.log('🔐 Hash String:', hashString); // Debug log
+
+  // Generate the hash
+  const hash = crypto
+    .createHash('sha512')
+    .update(hashString)
+    .digest('hex')
+    .toLowerCase();
+
+  console.log('🔐 Generated hash:', hash); // Debug log
   return hash;
 }
 
@@ -88,107 +109,75 @@ function verifyPayUHash(params, receivedHash) {
  * POST /employee/order/create
  */
 exports.createOrder = async (req, res) => {
-  const { amount, employeeId, planType, firstname, email, phone, txnid } = req.body;
-  console.log('📥 Create order request:', { amount, employeeId, planType, txnid });
-
-  if (!amount || !employeeId || !planType) {
-    return res.status(400).json({
-      success: false,
-      error: 'Amount, employeeId, and planType are required',
-    });
-  }
+  const { amount, employeeId, planType, firstname = 'Customer', email = 'guest@jobsstorm.com', phone = '9999999999' } = req.body;
+  console.log('📥 Create order request:', { amount, employeeId, planType, firstname, email, phone });
 
   try {
-    // Use provided txnid or generate new one
-    const transactionId = txnid || `TXN${Date.now()}${employeeId.substring(0, 5)}`;
-    const productInfo = `${planType} Subscription`;
+    // Generate transaction ID
+    const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
     const amountFormatted = Number(amount).toFixed(2);
-
-    // Check if order already exists
-    const existingOrder = await Order.findOne({ orderId: transactionId });
-    if (existingOrder) {
-      console.log('⚠️ Order already exists:', transactionId);
-      return res.status(400).json({
-        success: false,
-        error: 'Order already exists',
-      });
-    }
+    const productinfo = `${planType} Subscription`;
 
     // Create order in database
-    const newOrder = new Order({
-      orderId: transactionId,
-      amount: Number(amount),
+    const order = new Order({
+      orderId: txnid,
+      amount: amountFormatted,
       currency: 'INR',
-      status: 'pending',
+      status: 'created',
+      paymentMethod: 'payu',
       employeeId,
       planType,
-      type: 'employee_subscription',
-      createdAt: new Date(),
+      createdAt: new Date()
     });
 
-    await newOrder.save();
-    console.log('✅ Order created in database:', transactionId);
+    await order.save();
 
-    // Sanitize and default inputs
-    const sanitizedFirstname = (firstname || 'Customer').trim();
-    const sanitizedEmail = (email || 'guest@jobsstorm.com').trim();
-    const sanitizedPhone = (phone || '9999999999').trim();
-
-    // Generate PayU hash with UDF fields
+    // Generate hash for PayU
     const hashParams = {
       key: PAYU_MERCHANT_KEY,
-      txnid: transactionId,
+      txnid,
       amount: amountFormatted,
-      productinfo: productInfo,
-      firstname: sanitizedFirstname,
-      email: sanitizedEmail,
-      udf1: employeeId,     // Store employeeId for verification
-      udf2: planType,       // Store planType for verification
+      productinfo,
+      firstname,
+      email,
+      phone,
+      udf1: employeeId,
+      udf2: planType,
       udf3: '',
       udf4: '',
-      udf5: '',
+      udf5: ''
     };
 
     const hash = generatePayUHash(hashParams);
 
-    // Return payment data to frontend
-    res.status(200).json({
+    // Prepare response
+    const response = {
       success: true,
       order: {
-        id: transactionId,
+        id: txnid,
         amount: amountFormatted,
         currency: 'INR',
-        productInfo: productInfo,
+        productInfo: productinfo
       },
       paymentData: {
-        key: PAYU_MERCHANT_KEY,
-        txnid: transactionId,
-        amount: amountFormatted,
-        productinfo: productInfo,
-        firstname: sanitizedFirstname,
-        email: sanitizedEmail,
-        phone: sanitizedPhone,
-        // Frontend success/failure URLs
-        surl: `${FRONTEND_URL}/payment/success?txnid=${transactionId}`,
-        furl: `${FRONTEND_URL}/payment/failure?txnid=${transactionId}`,
-        hash: hash,
+        ...hashParams,
+        surl: `${process.env.FRONTEND_URL}/payment/success?txnid=${txnid}`,
+        furl: `${process.env.FRONTEND_URL}/payment/failure?txnid=${txnid}`,
+        hash,
         service_provider: 'payu_paisa',
-        udf1: employeeId,
-        udf2: planType,
-        udf3: '',
-        udf4: '',
-        udf5: '',
-        payuBaseUrl: PAYU_BASE_URL,
-      },
-    });
+        payuBaseUrl: PAYU_BASE_URL
+      }
+    };
 
-    console.log('✅ Payment data sent to frontend');
+    console.log('✅ Order created in database:', txnid);
+    res.json(response);
+
   } catch (error) {
     console.error('❌ Error creating order:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to create order',
-      message: error.message,
+      message: error.message
     });
   }
 };
