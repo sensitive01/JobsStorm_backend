@@ -7,8 +7,8 @@ const EmployeePlan = require('../../models/employeePlansSchema');
 // PayU Configuration
 const PAYU_MERCHANT_KEY = (process.env.PAYU_KEY || process.env.PAYU_MERCHANT_KEY || '25UP9m').trim();
 const PAYU_SALT = (process.env.PAYU_SALT || '4q63imYb3r3nzbLdmv6BCroviER1i6ZR').trim();
-const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://test.payu.in').trim();
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').trim();
+const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://secure.payu.in/_payment').trim();
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://jobsstorm.com/').trim();
 
 // Log PayU Configuration (Safe check)
 console.log('🔧 PayU Config Loaded:');
