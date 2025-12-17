@@ -87,7 +87,10 @@ function generatePayUHash(params) {
   return hash;
 }
 
-//////dfg
+/**
+ * Verify PayU response hash
+ * Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+ */
 function verifyPayUHash(params, receivedHash) {
   // Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
   const hashString = [
