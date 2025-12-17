@@ -113,8 +113,27 @@ function verifyPayUHash(params, receivedHash) {
  * POST /employee/order/create
  */
 exports.createOrder = async (req, res) => {
-  const { amount, employeeId, planType, firstname = 'Customer', email = 'guest@jobsstorm.com', phone = '9999999999' } = req.body;
-  console.log('📥 Create order request:', { amount, employeeId, planType, firstname, email, phone });
+  // Accept both "firstName" (from frontend) and "firstname" (internal) for compatibility
+  const {
+    amount,
+    employeeId,
+    planType,
+    firstName,
+    firstname: rawFirstname,
+    email = 'guest@jobsstorm.com',
+    phone = '9999999999',
+  } = req.body;
+
+  const firstname = firstName || rawFirstname || 'Customer';
+
+  console.log('📥 Create order request:', {
+    amount,
+    employeeId,
+    planType,
+    firstname,
+    email,
+    phone,
+  });
 
   try {
     // Generate transaction ID
