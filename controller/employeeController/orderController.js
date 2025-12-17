@@ -42,8 +42,8 @@ function generatePayUHash(params) {
     PAYU_SALT
   ].join('|');
 
+  console.log('🔐 Hash String:', hashString); // Add this for debugging
   const hash = crypto.createHash('sha512').update(hashString).digest('hex');
-  console.log('🔐 Generated hash string:', hashString);
   console.log('🔐 Generated hash:', hash);
   return hash;
 }
@@ -71,6 +71,7 @@ function verifyPayUHash(params, receivedHash) {
     params.key || PAYU_MERCHANT_KEY
   ].join('|');
 
+  console.log('🔐 Verification Hash String:', hashString); // Add this for debugging
   const calculatedHash = crypto
     .createHash('sha512')
     .update(hashString)
