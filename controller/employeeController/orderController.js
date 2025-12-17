@@ -8,7 +8,7 @@ const EmployeePlan = require('../../models/employeePlansSchema');
 // - PAYU_MERCHANT_KEY and PAYU_SALT must match the values from your PayU dashboard for the SAME environment (test or live)
 // - We now ALWAYS prefer PAYU_MERCHANT_KEY from env; PAYU_KEY is ignored to avoid mismatches
 // - PAYU_BASE_URL should be the base domain; the frontend appends "/_payment"
-const PAYU_MERCHANT_KEY = (process.env.PAYU_MERCHANT_KEY || 'aQhRWt').trim();
+const PAYU_MERCHANT_KEY = (process.env.PAYU_MERCHANT_KEY || '25UP9m').trim();
 const PAYU_SALT = (process.env.PAYU_SALT || '7WYXoM16ZmTQUTv5h9IZFnWAt8quyhx4').trim();
 // Default to production URL; for staging use PAYU_BASE_URL=https://test.payu.in in env
 const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://secure.payu.in').trim();
@@ -61,6 +61,20 @@ function generatePayUHash(params) {
   ].join('|');
 
   console.log('🔐 Hash String:', hashString); // Debug log
+  console.log('🔐 Hash components:', {
+    key,
+    txnid,
+    amount,
+    productinfo,
+    firstname,
+    email,
+    udf1,
+    udf2,
+    udf3,
+    udf4,
+    udf5,
+    salt,
+  });
 
   // Generate the hash
   const hash = crypto
