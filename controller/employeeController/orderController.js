@@ -200,7 +200,7 @@ exports.createOrder = async (req, res) => {
       orderId: txnid,
       amount: amountFormatted,
       currency: 'INR',
-      status: 'created',
+      status: 'Failed',
       paymentMethod: 'payu',
       employeeId: cleanEmployeeId,
       planType: cleanPlanType,
