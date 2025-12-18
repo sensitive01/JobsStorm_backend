@@ -17,17 +17,11 @@ if (!PAYU_SALT) {
 const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://secure.payu.in').trim();
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://jobsstorm.com/').trim();
 
-// Log PayU Configuration (Safe check)
 console.log('🔧 PayU Config Loaded:');
 console.log(`   - Key: ${PAYU_MERCHANT_KEY.substring(0, 2)}****${PAYU_MERCHANT_KEY.substring(PAYU_MERCHANT_KEY.length - 2)}`);
 console.log(`   - Salt: ${PAYU_SALT.substring(0, 2)}****${PAYU_SALT.substring(PAYU_SALT.length - 2)}`);
 console.log(`   - Base URL: ${PAYU_BASE_URL}`);
 
-/**
- * Generate PayU payment hash
- * Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
- * Note: PayU requires exactly 6 empty fields (||||||) between udf5 and SALT
- */
 function generatePayUHash(params) {
   // Ensure all parameters are strings, trimmed, and handle undefined/null cases
   // PayU is very strict about whitespace and formatting
@@ -95,17 +89,12 @@ function generatePayUHash(params) {
   console.log('🔐 Generated hash:', hash); // Debug log
   return hash;
 }
-
-/**
- * Verify PayU response hash
- * Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
- */
 function verifyPayUHash(params, receivedHash) {
   // Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
-  const hashString = [
+  const hashString = [ 
     PAYU_SALT,
  params.status || '',
-  '', '', '', '', '', '', // Empty fields
+  '', '', '', '', '',  // Empty fields
     params.udf5 || '',
     params.udf4 || '',
     params.udf3 || '',
@@ -131,10 +120,6 @@ function verifyPayUHash(params, receivedHash) {
   return isValid;
 }
 
-/**
- * Create order and generate payment hash
- * POST /employee/order/create
- */
 exports.createOrder = async (req, res) => {
   // Accept both "firstName" (from frontend) and "firstname" (internal) for compatibility
   const {
@@ -165,7 +150,7 @@ exports.createOrder = async (req, res) => {
 
   try {
     // Generate transaction ID
-    const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
+    const txnid = `TXN${Date.now()}`;
     const amountFormatted = Number(amount).toFixed(2);
     // Ensure productinfo is clean - no extra whitespace, trimmed
     const productinfo = `${String(planType || '').trim()} Subscription`.trim();
@@ -234,12 +219,6 @@ exports.createOrder = async (req, res) => {
     });
   }
 };
-
-/**
- * PayU Callback Handler (Webhook)
- * POST /employee/order/payu-callback
- * This receives payment response from PayU
- */
 exports.payuCallback = async (req, res) => {
   console.log('📥 PayU Callback received:', req.body);
 
