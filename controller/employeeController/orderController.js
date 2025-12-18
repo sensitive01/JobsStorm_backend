@@ -200,7 +200,7 @@ exports.createOrder = async (req, res) => {
       orderId: txnid,
       amount: amountFormatted,
       currency: 'INR',
-      status: 'Failed',
+      status: 'created',
       paymentMethod: 'payu',
       employeeId: cleanEmployeeId,
       planType: cleanPlanType,
@@ -476,15 +476,8 @@ exports.activateSubscription = async (paymentData) => {
       throw new Error('Employee not found');
     }
 
-    // Find plan by planId (for legacy support/slugs) or by name (new approach)
-    // We use case-insensitive regex for name matching to handle variations like "PREMIUM", "Premium", etc.
-    const plan = await EmployeePlan.findOne({
-      $or: [
-        { planId: planType },
-        { name: { $regex: new RegExp(`^${planType}$`, 'i') } }
-      ],
-      isActive: true
-    });
+    // Find plan
+    const plan = await EmployeePlan.findOne({ planId: planType, isActive: true });
     if (!plan) {
       throw new Error('Plan not found');
     }
