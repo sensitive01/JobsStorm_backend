@@ -9,7 +9,10 @@ const EmployeePlan = require('../../models/employeePlansSchema');
 // - We now ALWAYS prefer PAYU_MERCHANT_KEY from env; PAYU_KEY is ignored to avoid mismatches
 // - PAYU_BASE_URL should be the base domain; the frontend appends "/_payment"
 const PAYU_MERCHANT_KEY = (process.env.PAYU_MERCHANT_KEY || 'aQhRWt').trim();
-const PAYU_SALT = (process.env.PAYU_SALT || '7WYXoM16ZmTQUTv5h9IZFnWAt8quyhx4').trim();
+const PAYU_SALT = process.env.PAYU_SALT?.trim();
+if (!PAYU_SALT) {
+  throw new Error('PAYU_SALT is missing in environment variables!');
+}
 // Default to production URL; for staging use PAYU_BASE_URL=https://test.payu.in in env
 const PAYU_BASE_URL = (process.env.PAYU_BASE_URL || 'https://secure.payu.in').trim();
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://jobsstorm.com/').trim();
