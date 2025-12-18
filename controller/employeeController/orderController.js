@@ -2,6 +2,7 @@ const Order = require('../../models/orderSchema');
 const crypto = require('crypto');
 const Employee = require('../../models/employeeschema');
 const EmployeePlan = require('../../models/employeePlansSchema');
+const mongoose = require('mongoose');
 
 // PayU Configuration
 // Note:
@@ -476,8 +477,16 @@ exports.activateSubscription = async (paymentData) => {
       throw new Error('Employee not found');
     }
 
-    // Find plan
-    const plan = await EmployeePlan.findOne({ planId: planType, isActive: true });
+    // Find plan by _id (hex), planId (slug), or name (new approach)
+    // This makes the backend robust to whatever the frontend sends (ID or Name)
+    const plan = await EmployeePlan.findOne({
+      $or: [
+        { _id: mongoose.isValidObjectId(planType) ? planType : new mongoose.Types.ObjectId() },
+        { planId: planType },
+        { name: { $regex: new RegExp(`^${planType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+      ],
+      isActive: true
+    });
     if (!plan) {
       throw new Error('Plan not found');
     }
