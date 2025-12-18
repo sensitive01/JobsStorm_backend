@@ -60,6 +60,8 @@ function generatePayUHash(params) {
     '', // Empty field 2
     '', // Empty field 3
     '', // Empty field 4
+    '', // Empty field 5
+    '', // Empty field 6
     salt
   ].join('|');
 
@@ -85,25 +87,51 @@ function generatePayUHash(params) {
   
   // Verify hash string format
   // PayU format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
-  // Count pipes after udf2 to match PayU's expectation (9 pipes when udf3-5 are empty)
-  const afterUdf2 = hashString.substring(hashString.indexOf(udf2) + udf2.length);
-  const pipesBeforeSalt = afterUdf2.substring(0, afterUdf2.indexOf(salt));
-  const pipeCount = (pipesBeforeSalt.match(/\|/g) || []).length;
-  // When udf3, udf4, udf5 are empty: 
-  // After udf2 we have: | (separator) + | (udf3 empty) + | (udf4 empty) + | (udf5 empty) + | (separator) + 4 empty fields
-  // Total: 1 + 3 + 1 + 4 = 9 pipes before salt (matches PayU expectation)
-  const expectedPipeCount = 9; // 1 separator + 3 for empty udf3-5 + 1 separator + 4 for empty fields = 9 pipes
+  // Count pipes after udf5 (the actual udf5 field, not any substring)
+  // Find udf5 by looking for the pattern: |udf5| (to avoid finding it in other fields)
+  const udf5Pattern = `|${udf5}|`;
+  const udf5Index = hashString.indexOf(udf5Pattern);
   
-  if (pipeCount !== expectedPipeCount) {
-    console.error('❌❌❌ HASH STRING FORMAT MISMATCH! ❌❌❌');
-    console.error('Pipes after udf2 and before salt - Expected:', expectedPipeCount, 'Actual:', pipeCount);
-    console.error('Hash string:', hashString);
-    console.error('Section after udf2:', afterUdf2);
-    console.error('Pipes section:', pipesBeforeSalt);
-    console.error('Expected format: udf2| | | | | | | | |salt (9 pipes: 3 for empty udf3-5 + 6 for empty fields)');
-    console.error('PayU requires: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT');
+  if (udf5Index === -1) {
+    // If udf5 is empty, look for the pattern after udf4
+    const udf4Pattern = `|${udf4}|`;
+    const udf4Index = hashString.indexOf(udf4Pattern);
+    if (udf4Index !== -1) {
+      const afterUdf5 = hashString.substring(udf4Index + udf4Pattern.length - 1); // -1 to include the pipe
+      const pipesBeforeSalt = afterUdf5.substring(0, afterUdf5.indexOf(salt));
+      const pipeCount = (pipesBeforeSalt.match(/\|/g) || []).length;
+      // When udf5 is empty: | (udf5 empty) + 6 empty fields = 7 pipes before salt
+      const expectedPipeCount = 7; // 1 for empty udf5 + 6 for empty fields
+      
+      if (pipeCount !== expectedPipeCount) {
+        console.error('❌❌❌ HASH STRING FORMAT MISMATCH! ❌❌❌');
+        console.error('Pipes after udf5 and before salt - Expected:', expectedPipeCount, 'Actual:', pipeCount);
+        console.error('Hash string:', hashString);
+        console.error('Section after udf5:', afterUdf5);
+        console.error('Pipes section:', pipesBeforeSalt);
+      } else {
+        console.log('✅ Hash string format verification passed - correct number of pipes (5 after udf5)');
+      }
+    }
   } else {
-    console.log('✅ Hash string format verification passed - correct number of pipes (9 after udf2)');
+    const afterUdf5 = hashString.substring(udf5Index + udf5Pattern.length - 1); // -1 to include the pipe
+    const pipesBeforeSalt = afterUdf5.substring(0, afterUdf5.indexOf(salt));
+    const pipeCount = (pipesBeforeSalt.match(/\|/g) || []).length;
+    // When udf5 has value: | (separator) + 6 empty fields = 7 pipes before salt
+    const expectedPipeCount = 7; // 1 separator + 6 for empty fields
+    
+    if (pipeCount !== expectedPipeCount) {
+      console.error('❌❌❌ HASH STRING FORMAT MISMATCH! ❌❌❌');
+      console.error('Pipes after udf5 and before salt - Expected:', expectedPipeCount, 'Actual:', pipeCount);
+      console.error('Hash string:', hashString);
+      console.error('Section after udf5:', afterUdf5);
+      console.error('Pipes section:', pipesBeforeSalt);
+      console.error('Expected format: udf5| | | | | | |salt (7 pipes: 1 separator + 6 empty fields)');
+      console.error('PayU requires: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT');
+      console.error('Note: PayU format shows |||||| which means 6 empty fields');
+    } else {
+      console.log('✅ Hash string format verification passed - correct number of pipes (7 after udf5)');
+    }
   }
 
   // Generate the hash
