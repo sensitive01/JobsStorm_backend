@@ -204,6 +204,7 @@ exports.createOrder = async (req, res) => {
       paymentMethod: 'payu',
       employeeId: cleanEmployeeId,
       planType: cleanPlanType,
+      productinfo,
       createdAt: new Date()
     });
 
@@ -320,7 +321,7 @@ exports.payuCallback = async (req, res) => {
           key: PAYU_MERCHANT_KEY,
           txnid: order.orderId,
           amount: order.amount,
-          productinfo: `SUBSCRIPTION_${String(order.planType || '').trim()}`,
+          productinfo: order.productinfo || `SUBSCRIPTION_${String(order.planType || '').trim()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: order.employeeId,
@@ -340,7 +341,7 @@ exports.payuCallback = async (req, res) => {
           key: PAYU_MERCHANT_KEY,
           txnid: txnid || order.orderId,
           amount: amount || order.amount,
-          productinfo: productinfo || `SUBSCRIPTION_${String(order.planType || '').trim()}`,
+          productinfo: productinfo || order.productinfo || `SUBSCRIPTION_${String(order.planType || '').trim()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: employeeId || order.employeeId,
@@ -628,7 +629,7 @@ exports.verifyPayment = async (req, res) => {
           key: PAYU_MERCHANT_KEY,
           txnid: order.orderId,
           amount: order.amount,
-          productinfo: `${order.planType} Subscription`,
+          productinfo: order.productinfo || `SUBSCRIPTION_${String(order.planType || '').trim()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: order.employeeId,

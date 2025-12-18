@@ -9,13 +9,14 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['created', 'paid', 'failed', 'cancelled',"pending"],
+    enum: ['created', 'paid', 'failed', 'cancelled', "pending"],
     default: 'created',
   },
   employerid: String, // legacy
   employeeId: String, // for employee subscriptions
   planType: String, // e.g., silver/gold/platinum/starter/premium/special
   planId: String,
+  productinfo: String,
   type: {
     type: String,
     default: 'employee_subscription',
