@@ -63,21 +63,34 @@ function generatePayUHash(params) {
     salt
   ].join('|');
 
-  console.log('🔐 Hash String:', hashString); // Debug log
+  // Detailed logging for hash calculation
+  console.log('🔐 ========== PAYU HASH CALCULATION ==========');
+  console.log('🔐 Hash String (exact format):', hashString);
+  console.log('🔐 Hash String Length:', hashString.length);
+  console.log('🔐 Hash String (JSON escaped):', JSON.stringify(hashString));
   console.log('🔐 Hash components:', {
-    key,
-    txnid,
-    amount,
-    productinfo,
-    firstname,
-    email,
-    udf1,
-    udf2,
-    udf3,
-    udf4,
-    udf5,
-    salt,
+    key: `"${key}" (length: ${key.length})`,
+    txnid: `"${txnid}" (length: ${txnid.length})`,
+    amount: `"${amount}" (length: ${amount.length})`,
+    productinfo: `"${productinfo}" (length: ${productinfo.length})`,
+    firstname: `"${firstname}" (length: ${firstname.length})`,
+    email: `"${email}" (length: ${email.length})`,
+    udf1: `"${udf1}" (length: ${udf1.length})`,
+    udf2: `"${udf2}" (length: ${udf2.length})`,
+    udf3: `"${udf3}" (length: ${udf3.length})`,
+    udf4: `"${udf4}" (length: ${udf4.length})`,
+    udf5: `"${udf5}" (length: ${udf5.length})`,
+    salt: `"${salt.substring(0, 4)}****" (length: ${salt.length})`,
   });
+  
+  // Verify hash string format
+  const expectedFormat = `${key}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|${udf1}|${udf2}|${udf3}|${udf4}|${udf5}||||||${salt}`;
+  if (hashString !== expectedFormat) {
+    console.error('❌❌❌ HASH STRING FORMAT MISMATCH! ❌❌❌');
+    console.error('Expected:', expectedFormat);
+    console.error('Actual:', hashString);
+    console.error('Difference at position:', findFirstDifference(expectedFormat, hashString));
+  }
 
   // Generate the hash
   const hash = crypto
@@ -86,8 +99,36 @@ function generatePayUHash(params) {
     .digest('hex')
     .toLowerCase();
 
-  console.log('🔐 Generated hash:', hash); // Debug log
+  console.log('🔐 Generated hash:', hash);
+  console.log('🔐 Hash length:', hash.length, '(expected: 128 for SHA512)');
+  console.log('🔐 ===========================================');
+  
   return hash;
+}
+
+// Helper function to find first difference between two strings
+function findFirstDifference(str1, str2) {
+  const minLen = Math.min(str1.length, str2.length);
+  for (let i = 0; i < minLen; i++) {
+    if (str1[i] !== str2[i]) {
+      return {
+        position: i,
+        expected: `"${str1[i]}" (char code: ${str1.charCodeAt(i)})`,
+        actual: `"${str2[i]}" (char code: ${str2.charCodeAt(i)})`,
+        context: {
+          before: str1.substring(Math.max(0, i - 10), i),
+          after: str1.substring(i + 1, Math.min(str1.length, i + 11))
+        }
+      };
+    }
+  }
+  if (str1.length !== str2.length) {
+    return {
+      position: minLen,
+      message: `Length mismatch: expected ${str1.length}, got ${str2.length}`
+    };
+  }
+  return null;
 }
 function verifyPayUHash(params, receivedHash) {
   // Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
@@ -207,7 +248,23 @@ exports.createOrder = async (req, res) => {
       }
     };
 
+    // Log complete payment data for debugging
     console.log('✅ Order created in database:', txnid);
+    console.log('📦 Complete Payment Data being sent to frontend:');
+    console.log(JSON.stringify(response.paymentData, null, 2));
+    
+    // Verify hash one more time before sending
+    const verificationHash = generatePayUHash(hashParams);
+    if (verificationHash !== hash) {
+      console.error('❌❌❌ CRITICAL: Hash mismatch detected before sending! ❌❌❌');
+      console.error('Original hash:', hash);
+      console.error('Verification hash:', verificationHash);
+      console.error('Hash params:', hashParams);
+      // Still send the response but log the error
+    } else {
+      console.log('✅ Hash verification passed before sending to PayU');
+    }
+    
     res.json(response);
 
   } catch (error) {
@@ -238,6 +295,78 @@ exports.payuCallback = async (req, res) => {
     mode,
     payment_source,
   } = req.body;
+
+  // Check for hash calculation errors from PayU
+  const fullErrorMessage = errorMessage || error_Message || '';
+  if (fullErrorMessage && fullErrorMessage.toLowerCase().includes('hash')) {
+    console.error('❌❌❌ PAYU HASH ERROR IN CALLBACK! ❌❌❌');
+    console.error('Transaction ID:', txnid);
+    console.error('Full error message:', fullErrorMessage);
+    console.error('Callback data received:', JSON.stringify(req.body, null, 2));
+    
+    // Try to find the order and recalculate hash
+    try {
+      const order = await Order.findOne({ orderId: txnid });
+      if (order) {
+        console.error('📋 Order found in database:', {
+          orderId: order.orderId,
+          amount: order.amount,
+          planType: order.planType,
+          employeeId: order.employeeId,
+          status: order.status
+        });
+        
+        // Regenerate hash with original order data
+        const originalHashParams = {
+          key: PAYU_MERCHANT_KEY,
+          txnid: order.orderId,
+          amount: order.amount,
+          productinfo: `${order.planType} Subscription`,
+          firstname: firstname || 'Customer',
+          email: email || '',
+          udf1: order.employeeId,
+          udf2: order.planType,
+          udf3: '',
+          udf4: '',
+          udf5: ''
+        };
+        
+        console.error('🔍 Attempting to recalculate hash with original order data...');
+        const recalculatedHash = generatePayUHash(originalHashParams);
+        console.error('   Recalculated hash:', recalculatedHash);
+        console.error('   Hash received from PayU:', hash || 'not provided');
+        
+        // Also try with callback data
+        const callbackHashParams = {
+          key: PAYU_MERCHANT_KEY,
+          txnid: txnid || order.orderId,
+          amount: amount || order.amount,
+          productinfo: productinfo || `${order.planType} Subscription`,
+          firstname: firstname || 'Customer',
+          email: email || '',
+          udf1: employeeId || order.employeeId,
+          udf2: planType || order.planType,
+          udf3: '',
+          udf4: '',
+          udf5: ''
+        };
+        
+        const callbackRecalculatedHash = generatePayUHash(callbackHashParams);
+        console.error('🔍 Hash with callback data:', callbackRecalculatedHash);
+        
+        if (hash) {
+          console.error('   Hash comparison:');
+          console.error('     Original order hash === PayU hash?', recalculatedHash === hash.toLowerCase());
+          console.error('     Callback data hash === PayU hash?', callbackRecalculatedHash === hash.toLowerCase());
+        }
+      } else {
+        console.error('❌ Order not found in database for txnid:', txnid);
+      }
+    } catch (recalcError) {
+      console.error('❌ Error during hash recalculation:', recalcError);
+      console.error('Stack trace:', recalcError.stack);
+    }
+  }
 
   try {
     // Verify hash
@@ -463,8 +592,69 @@ async function generateUniqueCardNumber() {
  * POST /employee/order/verify
  */
 exports.verifyPayment = async (req, res) => {
-  const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType } = req.body;
+  const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType, error, error_Message } = req.body;
   console.log('📥 Manual verification request:', { txnid, status, employeeId });
+  
+  // Check for hash calculation errors from PayU
+  const errorMessage = error || error_Message || '';
+  if (errorMessage && errorMessage.toLowerCase().includes('hash')) {
+    console.error('❌❌❌ PAYU HASH ERROR DETECTED! ❌❌❌');
+    console.error('Transaction ID:', txnid);
+    console.error('Error message:', errorMessage);
+    console.error('Received data:', {
+      txnid,
+      status,
+      hash: hash ? `${hash.substring(0, 20)}...` : 'missing',
+      amount,
+      productinfo,
+      firstname,
+      email,
+      employeeId,
+      planType
+    });
+    
+    // Try to regenerate hash with received data to compare
+    try {
+      const order = await Order.findOne({ orderId: txnid });
+      if (order) {
+        console.error('📋 Order details from database:', {
+          orderId: order.orderId,
+          amount: order.amount,
+          planType: order.planType,
+          employeeId: order.employeeId
+        });
+        
+        // Regenerate hash with what we sent originally
+        const originalHashParams = {
+          key: PAYU_MERCHANT_KEY,
+          txnid: order.orderId,
+          amount: order.amount,
+          productinfo: `${order.planType} Subscription`,
+          firstname: firstname || 'Customer',
+          email: email || '',
+          udf1: order.employeeId,
+          udf2: order.planType,
+          udf3: '',
+          udf4: '',
+          udf5: ''
+        };
+        
+        const recalculatedHash = generatePayUHash(originalHashParams);
+        console.error('🔍 Hash recalculation with original data:');
+        console.error('   Original hash (from order):', order.paymentResponse?.hash || 'not stored');
+        console.error('   Recalculated hash:', recalculatedHash);
+        console.error('   Received hash from PayU:', hash || 'not provided');
+        
+        if (hash && recalculatedHash !== hash.toLowerCase()) {
+          console.error('❌ Hash mismatch confirmed!');
+          console.error('   Expected:', recalculatedHash);
+          console.error('   Received:', hash.toLowerCase());
+        }
+      }
+    } catch (recalcError) {
+      console.error('❌ Error recalculating hash:', recalcError);
+    }
+  }
 
   if (!txnid || !status || !employeeId || !planType) {
     return res.status(400).json({
@@ -630,6 +820,49 @@ exports.clearAllTransactions = async (req, res) => {
       success: false,
       message: 'Failed to fetch payment history',
       error: error.message,
+    });
+  }
+};
+
+/**
+ * Test hash calculation endpoint (for debugging)
+ * POST /employee/order/test-hash
+ */
+exports.testHashCalculation = async (req, res) => {
+  try {
+    const { key, txnid, amount, productinfo, firstname, email, udf1, udf2, udf3, udf4, udf5 } = req.body;
+    
+    console.log('🧪 Testing hash calculation with provided parameters');
+    
+    const hashParams = {
+      key: key || PAYU_MERCHANT_KEY,
+      txnid: txnid || `TEST${Date.now()}`,
+      amount: amount || '100.00',
+      productinfo: productinfo || 'Test Product',
+      firstname: firstname || 'Test User',
+      email: email || 'test@example.com',
+      udf1: udf1 || '',
+      udf2: udf2 || '',
+      udf3: udf3 || '',
+      udf4: udf4 || '',
+      udf5: udf5 || ''
+    };
+    
+    const hash = generatePayUHash(hashParams);
+    
+    return res.status(200).json({
+      success: true,
+      hashParams,
+      hash,
+      hashString: `${hashParams.key}|${hashParams.txnid}|${hashParams.amount}|${hashParams.productinfo}|${hashParams.firstname}|${hashParams.email}|${hashParams.udf1}|${hashParams.udf2}|${hashParams.udf3}|${hashParams.udf4}|${hashParams.udf5}||||||${PAYU_SALT}`,
+      message: 'Hash calculated successfully. Check terminal for detailed logs.'
+    });
+  } catch (error) {
+    console.error('❌ Error testing hash calculation:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to test hash calculation',
+      message: error.message,
     });
   }
 };
