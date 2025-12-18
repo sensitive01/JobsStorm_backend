@@ -84,7 +84,7 @@ function generatePayUHash(params) {
     udf5: `"${udf5}" (length: ${udf5.length})`,
     salt: `"${salt.substring(0, 4)}****" (length: ${salt.length})`,
   });
-  
+
   // Hash format verification - PayU format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
   // The |||||| means 6 empty fields after udf5
   // Format is correct: we have 6 empty fields as per PayU documentation
@@ -102,7 +102,7 @@ function generatePayUHash(params) {
   console.log('🔐 Generated hash:', hash);
   console.log('🔐 Hash length:', hash.length, '(expected: 128 for SHA512)');
   console.log('🔐 ===========================================');
-  
+
   return hash;
 }
 
@@ -132,10 +132,10 @@ function findFirstDifference(str1, str2) {
 }
 function verifyPayUHash(params, receivedHash) {
   // Format: SALT|status|||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
-  const hashString = [ 
+  const hashString = [
     PAYU_SALT,
- params.status || '',
-  '', '', '', '', '',  // Empty fields
+    params.status || '',
+    '', '', '', '', '',  // Empty fields
     params.udf5 || '',
     params.udf4 || '',
     params.udf3 || '',
@@ -194,7 +194,7 @@ exports.createOrder = async (req, res) => {
     const txnid = `TXN${Date.now()}`;
     const amountFormatted = Number(amount).toFixed(2);
     // Ensure productinfo is clean - no extra whitespace, trimmed
-    const productinfo = `${String(planType || '').trim()} Subscription`.trim();
+    const productinfo = `SUBSCRIPTION_${String(planType || '').trim().toUpperCase()}`;
 
     // Create order in database
     const order = new Order({
@@ -252,7 +252,7 @@ exports.createOrder = async (req, res) => {
     console.log('✅ Order created in database:', txnid);
     console.log('📦 Complete Payment Data being sent to frontend:');
     console.log(JSON.stringify(response.paymentData, null, 2));
-    
+
     // Verify hash one more time before sending
     const verificationHash = generatePayUHash(hashParams);
     if (verificationHash !== hash) {
@@ -264,7 +264,7 @@ exports.createOrder = async (req, res) => {
     } else {
       console.log('✅ Hash verification passed before sending to PayU');
     }
-    
+
     res.json(response);
 
   } catch (error) {
@@ -303,7 +303,7 @@ exports.payuCallback = async (req, res) => {
     console.error('Transaction ID:', txnid);
     console.error('Full error message:', fullErrorMessage);
     console.error('Callback data received:', JSON.stringify(req.body, null, 2));
-    
+
     // Try to find the order and recalculate hash
     try {
       const order = await Order.findOne({ orderId: txnid });
@@ -315,13 +315,13 @@ exports.payuCallback = async (req, res) => {
           employeeId: order.employeeId,
           status: order.status
         });
-        
+
         // Regenerate hash with original order data
         const originalHashParams = {
           key: PAYU_MERCHANT_KEY,
           txnid: order.orderId,
           amount: order.amount,
-          productinfo: `${order.planType} Subscription`,
+          productinfo: `SUBSCRIPTION_${String(order.planType || '').trim().toUpperCase()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: order.employeeId,
@@ -330,18 +330,18 @@ exports.payuCallback = async (req, res) => {
           udf4: '',
           udf5: ''
         };
-        
+
         console.error('🔍 Attempting to recalculate hash with original order data...');
         const recalculatedHash = generatePayUHash(originalHashParams);
         console.error('   Recalculated hash:', recalculatedHash);
         console.error('   Hash received from PayU:', hash || 'not provided');
-        
+
         // Also try with callback data
         const callbackHashParams = {
           key: PAYU_MERCHANT_KEY,
           txnid: txnid || order.orderId,
           amount: amount || order.amount,
-          productinfo: productinfo || `${order.planType} Subscription`,
+          productinfo: productinfo || `SUBSCRIPTION_${String(order.planType || '').trim().toUpperCase()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: employeeId || order.employeeId,
@@ -350,10 +350,10 @@ exports.payuCallback = async (req, res) => {
           udf4: '',
           udf5: ''
         };
-        
+
         const callbackRecalculatedHash = generatePayUHash(callbackHashParams);
         console.error('🔍 Hash with callback data:', callbackRecalculatedHash);
-        
+
         if (hash) {
           console.error('   Hash comparison:');
           console.error('     Original order hash === PayU hash?', recalculatedHash === hash.toLowerCase());
@@ -536,7 +536,7 @@ exports.activateSubscription = async (paymentData) => {
       status: 'success',
       txnid,
       amount,
-      productinfo: `${planType} Subscription`,
+      productinfo: `SUBSCRIPTION_${String(planType || '').trim().toUpperCase()}`,
       firstname,
       email,
       phone,
@@ -594,7 +594,7 @@ async function generateUniqueCardNumber() {
 exports.verifyPayment = async (req, res) => {
   const { txnid, status, hash, amount, productinfo, firstname, email, employeeId, planType, error, error_Message } = req.body;
   console.log('📥 Manual verification request:', { txnid, status, employeeId });
-  
+
   // Check for hash calculation errors from PayU
   const errorMessage = error || error_Message || '';
   if (errorMessage && errorMessage.toLowerCase().includes('hash')) {
@@ -612,7 +612,7 @@ exports.verifyPayment = async (req, res) => {
       employeeId,
       planType
     });
-    
+
     // Try to regenerate hash with received data to compare
     try {
       const order = await Order.findOne({ orderId: txnid });
@@ -623,7 +623,7 @@ exports.verifyPayment = async (req, res) => {
           planType: order.planType,
           employeeId: order.employeeId
         });
-        
+
         // Regenerate hash with what we sent originally
         const originalHashParams = {
           key: PAYU_MERCHANT_KEY,
@@ -638,13 +638,13 @@ exports.verifyPayment = async (req, res) => {
           udf4: '',
           udf5: ''
         };
-        
+
         const recalculatedHash = generatePayUHash(originalHashParams);
         console.error('🔍 Hash recalculation with original data:');
         console.error('   Original hash (from order):', order.paymentResponse?.hash || 'not stored');
         console.error('   Recalculated hash:', recalculatedHash);
         console.error('   Received hash from PayU:', hash || 'not provided');
-        
+
         if (hash && recalculatedHash !== hash.toLowerCase()) {
           console.error('❌ Hash mismatch confirmed!');
           console.error('   Expected:', recalculatedHash);
@@ -676,7 +676,7 @@ exports.verifyPayment = async (req, res) => {
     // Handle failed/cancelled payments gracefully - return 200 with success: false
     if (status !== 'success') {
       console.log('⚠️ Payment not successful:', { txnid, status, error: req.body.error || req.body.error_Message });
-      
+
       // Update order status
       order.status = status === 'cancelled' ? 'cancelled' : 'failed';
       order.errorMessage = req.body.error || req.body.error_Message || 'Payment not successful';
@@ -718,7 +718,7 @@ exports.verifyPayment = async (req, res) => {
         order.errorMessage = 'Invalid payment hash';
         order.verifiedAt = new Date();
         await order.save();
-        
+
         return res.status(200).json({
           success: false,
           error: 'Invalid payment hash',
@@ -831,9 +831,9 @@ exports.clearAllTransactions = async (req, res) => {
 exports.testHashCalculation = async (req, res) => {
   try {
     const { key, txnid, amount, productinfo, firstname, email, udf1, udf2, udf3, udf4, udf5 } = req.body;
-    
+
     console.log('🧪 Testing hash calculation with provided parameters');
-    
+
     const hashParams = {
       key: key || PAYU_MERCHANT_KEY,
       txnid: txnid || `TEST${Date.now()}`,
@@ -847,9 +847,9 @@ exports.testHashCalculation = async (req, res) => {
       udf4: udf4 || '',
       udf5: udf5 || ''
     };
-    
+
     const hash = generatePayUHash(hashParams);
-    
+
     return res.status(200).json({
       success: true,
       hashParams,
