@@ -56,12 +56,11 @@ function generatePayUHash(params) {
     udf3,
     udf4,
     udf5,
-    '', // Empty field 1
-    '', // Empty field 2
-    '', // Empty field 3
-    '', // Empty field 4
-    '', // Empty field 5
-    '', // Empty field 6
+    '', // udf6
+    '', // udf7
+    '', // udf8
+    '', // udf9
+    '', // udf10
     salt
   ].join('|');
 
@@ -194,7 +193,7 @@ exports.createOrder = async (req, res) => {
     const txnid = `TXN${Date.now()}`;
     const amountFormatted = Number(amount).toFixed(2);
     // Ensure productinfo is clean - no extra whitespace, trimmed
-    const productinfo = `SUBSCRIPTION_${String(planType || '').trim().toUpperCase()}`;
+    const productinfo = `SUBSCRIPTION_${String(planType || '').trim()}`;
 
     // Create order in database
     const order = new Order({
@@ -321,7 +320,7 @@ exports.payuCallback = async (req, res) => {
           key: PAYU_MERCHANT_KEY,
           txnid: order.orderId,
           amount: order.amount,
-          productinfo: `SUBSCRIPTION_${String(order.planType || '').trim().toUpperCase()}`,
+          productinfo: `SUBSCRIPTION_${String(order.planType || '').trim()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: order.employeeId,
@@ -341,7 +340,7 @@ exports.payuCallback = async (req, res) => {
           key: PAYU_MERCHANT_KEY,
           txnid: txnid || order.orderId,
           amount: amount || order.amount,
-          productinfo: productinfo || `SUBSCRIPTION_${String(order.planType || '').trim().toUpperCase()}`,
+          productinfo: productinfo || `SUBSCRIPTION_${String(order.planType || '').trim()}`,
           firstname: firstname || 'Customer',
           email: email || '',
           udf1: employeeId || order.employeeId,
@@ -536,7 +535,7 @@ exports.activateSubscription = async (paymentData) => {
       status: 'success',
       txnid,
       amount,
-      productinfo: `SUBSCRIPTION_${String(planType || '').trim().toUpperCase()}`,
+      productinfo: `SUBSCRIPTION_${String(planType || '').trim()}`,
       firstname,
       email,
       phone,
