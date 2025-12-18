@@ -26,23 +26,28 @@ console.log(`   - Base URL: ${PAYU_BASE_URL}`);
 /**
  * Generate PayU payment hash
  * Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+ * Note: PayU requires exactly 6 empty fields (||||||) between udf5 and SALT
  */
 function generatePayUHash(params) {
-  // Ensure all parameters are strings and handle undefined/null cases
-  const key = String(params.key || '');
-  const txnid = String(params.txnid || '');
-  const amount = Number(params.amount).toFixed(2); // Ensure 2 decimal places
-  const productinfo = String(params.productinfo || '');
-  const firstname = String(params.firstname || '');
-  const email = String(params.email || '');
-  const udf1 = String(params.udf1 || '');
-  const udf2 = String(params.udf2 || '');
-  const udf3 = String(params.udf3 || '');
-  const udf4 = String(params.udf4 || '');
-  const udf5 = String(params.udf5 || '');
-  const salt = String(PAYU_SALT || '');
+  // Ensure all parameters are strings, trimmed, and handle undefined/null cases
+  // PayU is very strict about whitespace and formatting
+  const key = String(params.key || '').trim();
+  const txnid = String(params.txnid || '').trim();
+  const amount = Number(params.amount).toFixed(2); // Ensure 2 decimal places, no trailing zeros issues
+  const productinfo = String(params.productinfo || '').trim();
+  const firstname = String(params.firstname || '').trim();
+  const email = String(params.email || '').trim();
+  const udf1 = String(params.udf1 || '').trim();
+  const udf2 = String(params.udf2 || '').trim();
+  const udf3 = String(params.udf3 || '').trim();
+  const udf4 = String(params.udf4 || '').trim();
+  const udf5 = String(params.udf5 || '').trim();
+  const salt = String(PAYU_SALT || '').trim();
 
   // Build the hash string in the exact order required by PayU
+  // Format: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+  // The |||||| means 6 empty fields between udf5 and SALT
+  // PayU documentation: https://docs.payu.in/docs/hashing-request-and-response
   const hashString = [
     key,
     txnid,
@@ -55,11 +60,12 @@ function generatePayUHash(params) {
     udf3,
     udf4,
     udf5,
-    '', // udf6
-    '', // udf7
-    '', // udf8
-    '', // udf9
-    '', // udf10
+    '', // Empty field 1
+    '', // Empty field 2
+    '', // Empty field 3
+    '', // Empty field 4
+    '', // Empty field 5
+    '', // Empty field 6
     salt
   ].join('|');
 
@@ -141,22 +147,28 @@ exports.createOrder = async (req, res) => {
     phone = '9999999999',
   } = req.body;
 
-  const firstname = firstName || rawFirstname || 'Customer';
+  // Clean and trim all input values to prevent hash mismatches
+  const firstname = (firstName || rawFirstname || 'Customer').trim();
+  const cleanEmail = String(email || 'guest@jobsstorm.com').trim();
+  const cleanPhone = String(phone || '9999999999').trim();
+  const cleanEmployeeId = String(employeeId || '').trim();
+  const cleanPlanType = String(planType || '').trim();
 
   console.log('📥 Create order request:', {
     amount,
-    employeeId,
-    planType,
+    employeeId: cleanEmployeeId,
+    planType: cleanPlanType,
     firstname,
-    email,
-    phone,
+    email: cleanEmail,
+    phone: cleanPhone,
   });
 
   try {
     // Generate transaction ID
     const txnid = `TXN${Date.now()}${employeeId.substring(0, 5)}`;
     const amountFormatted = Number(amount).toFixed(2);
-    const productinfo = `${planType} Subscription`;
+    // Ensure productinfo is clean - no extra whitespace, trimmed
+    const productinfo = `${String(planType || '').trim()} Subscription`.trim();
 
     // Create order in database
     const order = new Order({
@@ -165,24 +177,25 @@ exports.createOrder = async (req, res) => {
       currency: 'INR',
       status: 'created',
       paymentMethod: 'payu',
-      employeeId,
-      planType,
+      employeeId: cleanEmployeeId,
+      planType: cleanPlanType,
       createdAt: new Date()
     });
 
     await order.save();
 
     // Generate hash for PayU
+    // Use cleaned values to ensure hash matches what PayU receives
     const hashParams = {
       key: PAYU_MERCHANT_KEY,
       txnid,
       amount: amountFormatted,
       productinfo,
       firstname,
-      email,
-      phone,
-      udf1: employeeId,
-      udf2: planType,
+      email: cleanEmail,
+      phone: cleanPhone,
+      udf1: cleanEmployeeId,
+      udf2: cleanPlanType,
       udf3: '',
       udf4: '',
       udf5: ''
