@@ -482,7 +482,37 @@ exports.verifyPayment = async (req, res) => {
   }
 
   try {
-    // Verify hash if provided
+    // Find order first to check if it exists
+    const order = await Order.findOne({ orderId: txnid });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found',
+      });
+    }
+
+    // Handle failed/cancelled payments gracefully - return 200 with success: false
+    if (status !== 'success') {
+      console.log('⚠️ Payment not successful:', { txnid, status, error: req.body.error || req.body.error_Message });
+      
+      // Update order status
+      order.status = status === 'cancelled' ? 'cancelled' : 'failed';
+      order.errorMessage = req.body.error || req.body.error_Message || 'Payment not successful';
+      order.paymentResponse = req.body;
+      order.verifiedAt = new Date();
+      await order.save();
+
+      // Return 200 with success: false (not 400) to avoid frontend errors
+      return res.status(200).json({
+        success: false,
+        error: order.errorMessage,
+        orderId: txnid,
+        status: order.status,
+        message: 'Payment verification completed - payment was not successful',
+      });
+    }
+
+    // Verify hash if provided (only for successful payments)
     if (hash) {
       const hashParams = {
         key: PAYU_MERCHANT_KEY,
@@ -500,33 +530,20 @@ exports.verifyPayment = async (req, res) => {
       };
 
       if (!verifyPayUHash(hashParams, hash)) {
-        console.log('❌ Invalid hash');
-        return res.status(400).json({
+        console.log('❌ Invalid hash for successful payment');
+        // Still update order as failed due to hash mismatch
+        order.status = 'failed';
+        order.errorMessage = 'Invalid payment hash';
+        order.verifiedAt = new Date();
+        await order.save();
+        
+        return res.status(200).json({
           success: false,
           error: 'Invalid payment hash',
+          orderId: txnid,
+          status: 'failed',
         });
       }
-    }
-
-    const order = await Order.findOne({ orderId: txnid });
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: 'Order not found',
-      });
-    }
-
-    if (status !== 'success') {
-      order.status = status === 'cancelled' ? 'cancelled' : 'failed';
-      order.errorMessage = req.body.error || req.body.error_Message || 'Payment not successful';
-      await order.save();
-
-      return res.status(400).json({
-        success: false,
-        error: order.errorMessage,
-        orderId: txnid,
-        status: order.status,
-      });
     }
 
     if (order.status === 'paid') {
