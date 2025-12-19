@@ -412,32 +412,64 @@ const getApplicationStatus = async (req, res) => {
 // employeeController.js
 
 const uploadFile = async (req, res) => {
+  console.log('Starting file upload process...');
   try {
     const { employid } = req.params;
     const fileType = req.query.fileType || req.body.fileType;
 
+    console.log(`Upload request received - Employee ID: ${employid}, File Type: ${fileType}`);
+    console.log('Request files:', req.file ? 'File received' : 'No file found');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
     // Validate inputs
     if (!employid || !mongoose.isValidObjectId(employid)) {
-      return res.status(400).json({ message: "Valid employee ID is required" });
+      console.error('Invalid employee ID provided:', employid);
+      return res.status(400).json({ 
+        success: false,
+        message: "Valid employee ID is required",
+        error: "INVALID_EMPLOYEE_ID"
+      });
     }
 
     if (!fileType) {
-      return res
-        .status(400)
-        .json({ message: "File type (fileType) is required" });
+      console.error('No fileType provided in request');
+      return res.status(400).json({ 
+        success: false,
+        message: "File type (fileType) is required",
+        error: "MISSING_FILE_TYPE"
+      });
     }
 
     if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      console.error('No file was uploaded in the request');
+      return res.status(400).json({ 
+        success: false,
+        message: "No file uploaded. Please select a file to upload.",
+        error: "NO_FILE_UPLOADED"
+      });
     }
 
     const result = req.file;
+    console.log('File upload result from middleware:', JSON.stringify({
+      originalname: result.originalname,
+      mimetype: result.mimetype,
+      size: result.size,
+      hasUrl: !!(result.secure_url || result.url || result.path)
+    }, null, 2));
 
     // Check if we have a valid URL in the result
     if (!result.secure_url && !result.url && !result.path) {
+      console.error('Cloudinary upload failed - No URL returned. Full result:', JSON.stringify(result, null, 2));
       return res.status(500).json({
-        message: "Cloudinary upload failed: No URL returned",
-        details: result,
+        success: false,
+        message: "File upload failed: Could not generate file URL",
+        error: "UPLOAD_FAILED",
+        details: {
+          fileSize: result.size,
+          mimetype: result.mimetype,
+          originalname: result.originalname,
+          timestamp: new Date().toISOString()
+        }
       });
     }
 
@@ -455,92 +487,207 @@ const uploadFile = async (req, res) => {
       switch (fileType) {
         case "profileImage":
           if (currentEmployee.userProfilePic) {
+            console.log('Deleting old profile image...');
             const publicId = currentEmployee.userProfilePic
               .split("/")
               .slice(-2)
               .join("/")
               .split(".")[0];
-            await cloudinary.uploader.destroy(publicId);
+            const deleteResult = await cloudinary.uploader.destroy(publicId);
+            console.log('Old profile image deletion result:', deleteResult);
           }
           break;
         case "resume":
           if (currentEmployee.resume?.url) {
+            console.log('Deleting old resume file...');
             const publicId = currentEmployee.resume.url
               .split("/")
               .slice(-2)
               .join("/")
               .split(".")[0];
-            await cloudinary.uploader.destroy(publicId, {
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
               resource_type: "raw",
             });
+            console.log('Old resume deletion result:', deleteResult);
+          } else {
+            console.log('No existing resume found to delete');
           }
           break;
         case "coverLetter":
           if (currentEmployee.coverLetterFile?.url) {
+            console.log('Deleting old cover letter...');
             const publicId = currentEmployee.coverLetterFile.url
               .split("/")
               .slice(-2)
               .join("/")
               .split(".")[0];
-            await cloudinary.uploader.destroy(publicId, {
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
               resource_type: "raw",
             });
+            console.log('Old cover letter deletion result:', deleteResult);
           }
           break;
       }
     } catch (deleteError) {
-      console.error("Error deleting old file:", deleteError);
+      console.error("Error deleting old file:", {
+        error: deleteError.message,
+        stack: deleteError.stack,
+        fileType,
+        employeeId: employid,
+        timestamp: new Date().toISOString()
+      });
       // Continue with the update even if deletion fails
     }
 
     // Prepare field update
     let updateField;
-    switch (fileType) {
-      case "profileImage":
-        updateField = { userProfilePic: fileUrl };
-        break;
-      case "resume":
-        updateField = {
-          resume: {
+    console.log('Preparing to update field for file type:', fileType);
+    
+    try {
+      switch (fileType) {
+        case "profileImage":
+          updateField = { userProfilePic: fileUrl };
+          console.log('Setting profile image URL:', fileUrl);
+          break;
+          
+        case "resume":
+          const resumeData = {
             name: result.originalname || result.filename || "Unnamed",
             url: fileUrl,
-          },
-        };
-        break;
-      case "coverLetter":
-        updateField = {
-          coverLetterFile: {
-            name: result.originalname || result.filename || "Unnamed",
-            url: fileUrl,
-          },
-        };
-        break;
-      default:
-        return res.status(400).json({ message: "Invalid file type provided" });
+            uploadedAt: new Date(),
+            size: result.size,
+            mimetype: result.mimetype
+          };
+          updateField = { resume: resumeData };
+          console.log('Setting resume data:', JSON.stringify(resumeData, null, 2));
+          break;
+          
+        case "coverLetter":
+          updateField = {
+            coverLetterFile: {
+              name: result.originalname || result.filename || "Unnamed",
+              url: fileUrl,
+              uploadedAt: new Date()
+            },
+          };
+          console.log('Setting cover letter URL:', fileUrl);
+          break;
+          
+        default:
+          console.error('Invalid file type provided:', fileType);
+          return res.status(400).json({ 
+            success: false,
+            message: "Invalid file type provided",
+            error: "INVALID_FILE_TYPE",
+            allowedTypes: ["profileImage", "resume", "coverLetter"]
+          });
+      }
+    } catch (updateError) {
+      console.error('Error preparing update field:', {
+        error: updateError.message,
+        stack: updateError.stack,
+        fileType,
+        fileInfo: {
+          originalname: result.originalname,
+          size: result.size,
+          mimetype: result.mimetype
+        }
+      });
+      throw updateError;
     }
 
-    // Update employee document
-    const updatedEmployee = await userModel.findByIdAndUpdate(
-      employid,
-      { $set: updateField },
-      { new: true, runValidators: true }
-    );
+    console.log('Updating employee document with new file reference...');
+    
+    try {
+      const updatedEmployee = await userModel.findByIdAndUpdate(
+        employid,
+        { $set: updateField },
+        { 
+          new: true, 
+          runValidators: true,
+          context: 'query' // Ensures validators run with the correct context
+        }
+      );
 
-    res.status(200).json({
-      success: true,
-      fileType,
-      file: {
-        name: result.originalname || result.filename || "Unnamed",
-        url: fileUrl,
-      },
-      message: "File uploaded and saved successfully",
-    });
+      if (!updatedEmployee) {
+        console.error('Failed to update employee document - employee not found:', employid);
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found",
+          error: "EMPLOYEE_NOT_FOUND"
+        });
+      }
+
+      console.log('Employee document updated successfully');
+      
+      const response = {
+        success: true,
+        fileType,
+        file: {
+          name: result.originalname || result.filename || "Unnamed",
+          url: fileUrl,
+          size: result.size,
+          mimetype: result.mimetype,
+          uploadedAt: new Date().toISOString()
+        },
+        message: "File uploaded and saved successfully"
+      };
+      
+      console.log('Upload completed successfully:', JSON.stringify(response, null, 2));
+      res.status(200).json(response);
+      
+    } catch (updateError) {
+      console.error('Error updating employee document:', {
+        error: updateError.message,
+        stack: updateError.stack,
+        employeeId: employid,
+        fileType,
+        updateField,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Try to provide more specific error messages based on error type
+      let errorMessage = "Failed to update employee record";
+      let statusCode = 500;
+      
+      if (updateError.name === 'ValidationError') {
+        errorMessage = "Validation failed: " + updateError.message;
+        statusCode = 400;
+      } else if (updateError.name === 'CastError') {
+        errorMessage = "Invalid employee ID format";
+        statusCode = 400;
+      }
+      
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: updateError.name || "UPDATE_FAILED",
+        details: process.env.NODE_ENV === 'development' ? updateError.message : undefined
+      });
+    }
   } catch (error) {
-    console.error("Error uploading file:", error);
+    console.error("Error in file upload process:", {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      fileInfo: req.file ? {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : 'No file data',
+      params: req.params,
+      query: req.query,
+      body: req.body
+    });
+    
     res.status(500).json({
       success: false,
-      message: "Internal server error during file upload",
-      error: error.message,
+      message: "An unexpected error occurred during file upload",
+      error: error.name || "UPLOAD_ERROR",
+      ...(process.env.NODE_ENV === 'development' && { 
+        details: error.message,
+        stack: error.stack 
+      })
     });
   }
 };

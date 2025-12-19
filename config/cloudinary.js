@@ -110,7 +110,7 @@ const resumeStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: (req, file) => ({
     folder: 'employee_resumes',
-    allowed_formats: ['pdf', 'doc', 'docx', 'docm', 'dotx', 'dotm', 'txt', 'rtf', 'odt', 'pages'],
+    allowed_formats: ['pdf', 'doc', 'docx', 'txt'],
     public_id: generatePublicId(req, file, 'resume'),
     ...getDocumentSettings(req, file),
     // Specific settings for resumes
@@ -124,7 +124,7 @@ const coverLetterStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: (req, file) => ({
     folder: 'employee_cover_letters',
-    allowed_formats: ['pdf', 'doc', 'docx', 'docm', 'dotx', 'dotm', 'txt', 'rtf', 'odt', 'pages'],
+    allowed_formats: ['pdf', 'doc', 'docx', 'txt'],
     public_id: generatePublicId(req, file, 'coverletter'),
     ...getDocumentSettings(req, file),
     format: 'pdf',
