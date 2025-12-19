@@ -91,6 +91,34 @@ const getCloudinaryParams = (req, file, fileType) => {
         format: 'pdf',
         flags: 'attachment',
       };
+    case "passport":
+      return {
+        ...baseParams,
+        folder: 'employee_passports',
+        resource_type: 'auto', // Can be image or PDF
+        flags: 'attachment',
+      };
+    case "educationCertificate":
+      return {
+        ...baseParams,
+        folder: 'employee_education_certificates',
+        resource_type: 'auto', // Can be image or PDF
+        flags: 'attachment',
+      };
+    case "policeClearance":
+      return {
+        ...baseParams,
+        folder: 'employee_police_clearance',
+        resource_type: 'auto', // Can be image or PDF
+        flags: 'attachment',
+      };
+    case "mofaAttestation":
+      return {
+        ...baseParams,
+        folder: 'employee_mofa_attestation',
+        resource_type: 'auto', // Can be image or PDF
+        flags: 'attachment',
+      };
     case "profileVideo":
       return {
         ...baseParams,
@@ -111,20 +139,111 @@ const getCloudinaryParams = (req, file, fileType) => {
         audio_bit_rate: '128k',
       };
     default:
-      return baseParams;
+      // Return default params for unknown types
+      return {
+        ...baseParams,
+        folder: 'employee_documents',
+        resource_type: 'auto',
+      };
   }
+};
+
+// ===============================
+// Helper: Normalize fileType (trim, lowercase, remove extra words)
+// ===============================
+const normalizeFileType = (fileType) => {
+  if (!fileType) return null;
+  
+  // Convert to lowercase and trim
+  let normalized = String(fileType).toLowerCase().trim();
+  
+  // Remove common file extensions and extra words (more aggressive)
+  normalized = normalized
+    .replace(/\s*(pdf|jpg|jpeg|png|doc|docx|image|file|document)\s*/gi, '')
+    .replace(/\s+/g, '') // Remove all spaces
+    .trim();
+  
+  // Map common variations to standard types
+  const typeMap = {
+    'passport': 'passport',
+    'passportpdf': 'passport',
+    'passportimage': 'passport',
+    'passportdoc': 'passport',
+    'education': 'educationCertificate',
+    'educationcertificate': 'educationCertificate',
+    'educationcert': 'educationCertificate',
+    'educationpdf': 'educationCertificate',
+    'police': 'policeClearance',
+    'policeclearance': 'policeClearance',
+    'policeclearancepdf': 'policeClearance',
+    'pcc': 'policeClearance',
+    'mofa': 'mofaAttestation',
+    'mofaattestation': 'mofaAttestation',
+    'mofapdf': 'mofaAttestation',
+    'profile': 'profileImage',
+    'profileimage': 'profileImage',
+    'profilepic': 'profileImage',
+    'resume': 'resume',
+    'resumepdf': 'resume',
+    'cv': 'resume',
+    'coverletter': 'coverLetter',
+    'coverletterpdf': 'coverLetter',
+    'cover': 'coverLetter',
+  };
+  
+  // Try exact match first
+  if (typeMap[normalized]) {
+    return typeMap[normalized];
+  }
+  
+  // Try partial match (contains)
+  for (const [key, value] of Object.entries(typeMap)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return value;
+    }
+  }
+  
+  // If still not found, try to extract the main word
+  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover'];
+  for (const word of mainWords) {
+    if (normalized.includes(word)) {
+      if (word === 'education') return 'educationCertificate';
+      if (word === 'police') return 'policeClearance';
+      if (word === 'mofa') return 'mofaAttestation';
+      if (word === 'profile') return 'profileImage';
+      if (word === 'cover') return 'coverLetter';
+      return word;
+    }
+  }
+  
+  // Return as-is if nothing matches (might be a valid type)
+  return normalized;
 };
 
 // ===============================
 // Dynamic Upload Middleware with Compression
 // ===============================
 const dynamicUploadMiddleware = (req, res, next) => {
-  const fileType =
+  let fileType =
     req.query.fileType || req.headers["filetype"] || req.body.fileType;
 
+  // Normalize the fileType
+  const originalFileType = fileType;
+  fileType = normalizeFileType(fileType);
+  
+  console.log(`FileType normalization: "${originalFileType}" -> "${fileType}"`);
+
   if (!fileType) {
-    return res.status(400).json({ message: "Invalid or missing fileType" });
+    return res.status(400).json({ 
+      success: false,
+      message: "Invalid or missing fileType",
+      received: originalFileType
+    });
   }
+
+  // Store normalized fileType in request for controller to use
+  req.body.fileType = fileType;
+  req.query.fileType = fileType;
 
   // Use memory storage to get file buffer for compression
   const memoryStorage = multer.memoryStorage();
@@ -173,15 +292,36 @@ const dynamicUploadMiddleware = (req, res, next) => {
         // Upload compressed file to Cloudinary
         const uploadParams = getCloudinaryParams(req, req.file, fileType);
         
+        if (!uploadParams) {
+          throw new Error(`Invalid file type: ${fileType}`);
+        }
+        
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,
           (error, result) => {
             if (error) {
               console.error('Cloudinary upload error:', error);
-              return res.status(500).json({
-                message: "Failed to upload file to Cloudinary",
-                error: error.message
-              });
+              // Ensure we send JSON response, not HTML
+              if (!res.headersSent) {
+                return res.status(500).json({
+                  success: false,
+                  message: "Failed to upload file to Cloudinary",
+                  error: error.message || "Upload failed"
+                });
+              }
+              return;
+            }
+
+            if (!result || !result.secure_url) {
+              console.error('Cloudinary upload failed - No URL returned');
+              if (!res.headersSent) {
+                return res.status(500).json({
+                  success: false,
+                  message: "Upload completed but no URL returned",
+                  error: "UPLOAD_FAILED"
+                });
+              }
+              return;
             }
 
             // Attach Cloudinary result to req.file for controller
@@ -195,6 +335,18 @@ const dynamicUploadMiddleware = (req, res, next) => {
           }
         );
 
+        // Handle stream errors
+        uploadStream.on('error', (streamError) => {
+          console.error('Upload stream error:', streamError);
+          if (!res.headersSent) {
+            return res.status(500).json({
+              success: false,
+              message: "Error uploading file stream",
+              error: streamError.message || "Stream error"
+            });
+          }
+        });
+
         // Create a readable stream from buffer and pipe to Cloudinary
         const bufferStream = new Readable();
         bufferStream.push(compressedBuffer);
@@ -202,10 +354,15 @@ const dynamicUploadMiddleware = (req, res, next) => {
         bufferStream.pipe(uploadStream);
       } catch (compressionError) {
         console.error('Compression/upload error:', compressionError);
-        return res.status(500).json({
-          message: "Error processing file",
-          error: compressionError.message
-        });
+        // Ensure we send JSON response, not HTML
+        if (!res.headersSent) {
+          return res.status(500).json({
+            success: false,
+            message: "Error processing file",
+            error: compressionError.message || "Processing error",
+            stack: process.env.NODE_ENV === 'development' ? compressionError.stack : undefined
+          });
+        }
       }
     })();
   });

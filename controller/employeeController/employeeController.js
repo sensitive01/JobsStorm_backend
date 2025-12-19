@@ -411,13 +411,86 @@ const getApplicationStatus = async (req, res) => {
 
 // employeeController.js
 
+// Helper: Normalize fileType
+const normalizeFileType = (fileType) => {
+  if (!fileType) return null;
+  
+  // Convert to lowercase and trim
+  let normalized = String(fileType).toLowerCase().trim();
+  
+  // Remove common file extensions and extra words (more aggressive)
+  normalized = normalized
+    .replace(/\s*(pdf|jpg|jpeg|png|doc|docx|image|file|document)\s*/gi, '')
+    .replace(/\s+/g, '') // Remove all spaces
+    .trim();
+  
+  // Map common variations to standard types
+  const typeMap = {
+    'passport': 'passport',
+    'passportpdf': 'passport',
+    'passportimage': 'passport',
+    'passportdoc': 'passport',
+    'education': 'educationCertificate',
+    'educationcertificate': 'educationCertificate',
+    'educationcert': 'educationCertificate',
+    'educationpdf': 'educationCertificate',
+    'police': 'policeClearance',
+    'policeclearance': 'policeClearance',
+    'policeclearancepdf': 'policeClearance',
+    'pcc': 'policeClearance',
+    'mofa': 'mofaAttestation',
+    'mofaattestation': 'mofaAttestation',
+    'mofapdf': 'mofaAttestation',
+    'profile': 'profileImage',
+    'profileimage': 'profileImage',
+    'profilepic': 'profileImage',
+    'resume': 'resume',
+    'resumepdf': 'resume',
+    'cv': 'resume',
+    'coverletter': 'coverLetter',
+    'coverletterpdf': 'coverLetter',
+    'cover': 'coverLetter',
+  };
+  
+  // Try exact match first
+  if (typeMap[normalized]) {
+    return typeMap[normalized];
+  }
+  
+  // Try partial match (contains)
+  for (const [key, value] of Object.entries(typeMap)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return value;
+    }
+  }
+  
+  // If still not found, try to extract the main word
+  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover'];
+  for (const word of mainWords) {
+    if (normalized.includes(word)) {
+      if (word === 'education') return 'educationCertificate';
+      if (word === 'police') return 'policeClearance';
+      if (word === 'mofa') return 'mofaAttestation';
+      if (word === 'profile') return 'profileImage';
+      if (word === 'cover') return 'coverLetter';
+      return word;
+    }
+  }
+  
+  // Return as-is if nothing matches (might be a valid type)
+  return normalized;
+};
+
 const uploadFile = async (req, res) => {
   console.log('Starting file upload process...');
   try {
     const { employid } = req.params;
-    const fileType = req.query.fileType || req.body.fileType;
+    let fileType = req.query.fileType || req.body.fileType;
+    
+    // Normalize the fileType
+    fileType = normalizeFileType(fileType);
 
-    console.log(`Upload request received - Employee ID: ${employid}, File Type: ${fileType}`);
+    console.log(`Upload request received - Employee ID: ${employid}, File Type: ${fileType} (normalized)`);
     console.log('Request files:', req.file ? 'File received' : 'No file found');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
 
@@ -527,6 +600,62 @@ const uploadFile = async (req, res) => {
             console.log('Old cover letter deletion result:', deleteResult);
           }
           break;
+        case "passport":
+          if (currentEmployee.passport?.url) {
+            console.log('Deleting old passport...');
+            const publicId = currentEmployee.passport.url
+              .split("/")
+              .slice(-2)
+              .join("/")
+              .split(".")[0];
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
+              resource_type: "auto",
+            });
+            console.log('Old passport deletion result:', deleteResult);
+          }
+          break;
+        case "educationCertificate":
+          if (currentEmployee.educationCertificate?.url) {
+            console.log('Deleting old education certificate...');
+            const publicId = currentEmployee.educationCertificate.url
+              .split("/")
+              .slice(-2)
+              .join("/")
+              .split(".")[0];
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
+              resource_type: "auto",
+            });
+            console.log('Old education certificate deletion result:', deleteResult);
+          }
+          break;
+        case "policeClearance":
+          if (currentEmployee.policeClearance?.url) {
+            console.log('Deleting old police clearance...');
+            const publicId = currentEmployee.policeClearance.url
+              .split("/")
+              .slice(-2)
+              .join("/")
+              .split(".")[0];
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
+              resource_type: "auto",
+            });
+            console.log('Old police clearance deletion result:', deleteResult);
+          }
+          break;
+        case "mofaAttestation":
+          if (currentEmployee.mofaAttestation?.url) {
+            console.log('Deleting old MOFA attestation...');
+            const publicId = currentEmployee.mofaAttestation.url
+              .split("/")
+              .slice(-2)
+              .join("/")
+              .split(".")[0];
+            const deleteResult = await cloudinary.uploader.destroy(publicId, {
+              resource_type: "auto",
+            });
+            console.log('Old MOFA attestation deletion result:', deleteResult);
+          }
+          break;
       }
     } catch (deleteError) {
       console.error("Error deleting old file:", {
@@ -573,13 +702,57 @@ const uploadFile = async (req, res) => {
           console.log('Setting cover letter URL:', fileUrl);
           break;
           
+        case "passport":
+          updateField = {
+            passport: {
+              name: result.originalname || result.filename || "Unnamed",
+              url: fileUrl,
+              uploadedAt: new Date()
+            },
+          };
+          console.log('Setting passport URL:', fileUrl);
+          break;
+          
+        case "educationCertificate":
+          updateField = {
+            educationCertificate: {
+              name: result.originalname || result.filename || "Unnamed",
+              url: fileUrl,
+              uploadedAt: new Date()
+            },
+          };
+          console.log('Setting education certificate URL:', fileUrl);
+          break;
+          
+        case "policeClearance":
+          updateField = {
+            policeClearance: {
+              name: result.originalname || result.filename || "Unnamed",
+              url: fileUrl,
+              uploadedAt: new Date()
+            },
+          };
+          console.log('Setting police clearance URL:', fileUrl);
+          break;
+          
+        case "mofaAttestation":
+          updateField = {
+            mofaAttestation: {
+              name: result.originalname || result.filename || "Unnamed",
+              url: fileUrl,
+              uploadedAt: new Date()
+            },
+          };
+          console.log('Setting MOFA attestation URL:', fileUrl);
+          break;
+          
         default:
           console.error('Invalid file type provided:', fileType);
           return res.status(400).json({ 
             success: false,
             message: "Invalid file type provided",
             error: "INVALID_FILE_TYPE",
-            allowedTypes: ["profileImage", "resume", "coverLetter"]
+            allowedTypes: ["profileImage", "resume", "coverLetter", "passport", "educationCertificate", "policeClearance", "mofaAttestation"]
           });
       }
     } catch (updateError) {
@@ -680,15 +853,20 @@ const uploadFile = async (req, res) => {
       body: req.body
     });
     
-    res.status(500).json({
-      success: false,
-      message: "An unexpected error occurred during file upload",
-      error: error.name || "UPLOAD_ERROR",
-      ...(process.env.NODE_ENV === 'development' && { 
-        details: error.message,
-        stack: error.stack 
-      })
-    });
+    // Ensure we always send JSON response, never HTML
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "An unexpected error occurred during file upload",
+        error: error.name || "UPLOAD_ERROR",
+        ...(process.env.NODE_ENV === 'development' && { 
+          details: error.message,
+          stack: error.stack 
+        })
+      });
+    } else {
+      console.error('Response already sent, cannot send error response');
+    }
   }
 };
 

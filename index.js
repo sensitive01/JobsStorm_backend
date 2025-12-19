@@ -161,10 +161,42 @@ cron.schedule("59 23 * * *", async () => {
 
 console.log('Cron jobs scheduled.'); // To confirm that the jobs are scheduled
 
-// Error Handling Middleware
+// Process-level error handlers to prevent HTML errors
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process, just log the error
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process in production, just log
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Uncaught exception logged, continuing...');
+  }
+});
+
+// Error Handling Middleware - Always return JSON, never HTML
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({ message: err.message || "Internal Server Error" });
+  console.error('Error caught by middleware:', {
+    message: err.message,
+    stack: err.stack,
+    status: err.status || 500,
+    path: req.path,
+    method: req.method
+  });
+  
+  // Ensure we always send JSON response
+  if (!res.headersSent) {
+    res.status(err.status || 500).json({ 
+      success: false,
+      message: err.message || "Internal Server Error",
+      error: err.name || "SERVER_ERROR",
+      ...(process.env.NODE_ENV === 'development' && { 
+        stack: err.stack,
+        details: err 
+      })
+    });
+  }
 });
 
 app.listen(PORT, () => {
