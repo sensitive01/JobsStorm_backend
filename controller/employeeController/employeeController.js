@@ -685,7 +685,13 @@ const uploadFile = async (req, res) => {
     
     // Ensure fileType is normalized (trim and handle case)
     fileType = String(fileType).trim();
-    console.log('Preparing to update field for file type:', fileType, '(type:', typeof fileType, ')');
+    console.log(`[${fileType}] Preparing to update field for file type:`, fileType, '(type:', typeof fileType, ')');
+    console.log(`[${fileType}] File info:`, {
+      originalname: result.originalname,
+      mimetype: result.mimetype,
+      size: result.size,
+      hasUrl: !!(result.secure_url || result.url)
+    });
     
     try {
       switch (fileType) {
@@ -736,7 +742,8 @@ const uploadFile = async (req, res) => {
               uploadedAt: new Date()
             },
           };
-          console.log('Setting education certificate URL:', fileUrl);
+          console.log(`[educationCertificate] Setting education certificate URL:`, fileUrl);
+          console.log(`[educationCertificate] Update field:`, JSON.stringify(updateField, null, 2));
           break;
           
         case "policeClearance":
@@ -825,33 +832,54 @@ const uploadFile = async (req, res) => {
       res.status(200).json(response);
       
     } catch (updateError) {
-      console.error('Error updating employee document:', {
+      console.error(`[${fileType}] Error updating employee document:`, {
         error: updateError.message,
         stack: updateError.stack,
+        name: updateError.name,
         employeeId: employid,
         fileType,
-        updateField,
+        updateField: JSON.stringify(updateField, null, 2),
         timestamp: new Date().toISOString()
       });
       
       // Try to provide more specific error messages based on error type
       let errorMessage = "Failed to update employee record";
       let statusCode = 500;
+      let errorDetails = {};
       
       if (updateError.name === 'ValidationError') {
         errorMessage = "Validation failed: " + updateError.message;
         statusCode = 400;
+        // Extract field-specific errors
+        if (updateError.errors) {
+          errorDetails.validationErrors = Object.keys(updateError.errors).map(key => ({
+            field: key,
+            message: updateError.errors[key].message
+          }));
+        }
       } else if (updateError.name === 'CastError') {
         errorMessage = "Invalid employee ID format";
         statusCode = 400;
+      } else if (updateError.message) {
+        errorMessage = updateError.message;
       }
       
-      res.status(statusCode).json({
-        success: false,
-        message: errorMessage,
-        error: updateError.name || "UPDATE_FAILED",
-        details: process.env.NODE_ENV === 'development' ? updateError.message : undefined
-      });
+      // Ensure we always send JSON response
+      if (!res.headersSent) {
+        res.status(statusCode).json({
+          success: false,
+          message: errorMessage,
+          error: updateError.name || "UPDATE_FAILED",
+          fileType: fileType,
+          ...errorDetails,
+          ...(process.env.NODE_ENV === 'development' && { 
+            details: updateError.message,
+            stack: updateError.stack 
+          })
+        });
+      } else {
+        console.error(`[${fileType}] Response already sent, cannot send error response`);
+      }
     }
   } catch (error) {
     console.error("Error in file upload process:", {

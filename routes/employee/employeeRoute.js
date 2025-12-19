@@ -298,59 +298,92 @@ const dynamicUploadMiddleware = (req, res, next) => {
     // Compress and upload asynchronously
     (async () => {
       try {
-        // Compress the file before uploading to Cloudinary
-        console.log(`Compressing ${fileType} file: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB)`);
-        
-        const compressedBuffer = await compressFile(
-          req.file.buffer,
-          req.file.mimetype,
-          {
-            maxWidth: 1920,
-            maxHeight: 1920,
-            quality: 85,
-            maxFileSize: 5 * 1024 * 1024 // Compress if > 5MB
-          }
-        );
+        // Validate file buffer exists
+        if (!req.file || !req.file.buffer) {
+          throw new Error('File buffer is missing');
+        }
 
-        console.log(`Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
+        // Compress the file before uploading to Cloudinary
+        console.log(`[${fileType}] Starting compression for: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB, ${req.file.mimetype})`);
+        
+        let compressedBuffer;
+        try {
+          compressedBuffer = await compressFile(
+            req.file.buffer,
+            req.file.mimetype,
+            {
+              maxWidth: 1920,
+              maxHeight: 1920,
+              quality: 85,
+              maxFileSize: 5 * 1024 * 1024 // Compress if > 5MB
+            }
+          );
+          console.log(`[${fileType}] Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
+        } catch (compressError) {
+          console.error(`[${fileType}] Compression error:`, compressError);
+          // Continue with original buffer if compression fails
+          compressedBuffer = req.file.buffer;
+          console.log(`[${fileType}] Using original file (compression failed)`);
+        }
 
         // Upload compressed file to Cloudinary
         const uploadParams = getCloudinaryParams(req, req.file, fileType);
         
         if (!uploadParams) {
-          console.error(`Failed to get Cloudinary params for fileType: ${fileType}`);
+          console.error(`[${fileType}] Failed to get Cloudinary params for fileType: ${fileType}`);
           throw new Error(`Invalid file type: ${fileType}. Please use one of: profileImage, resume, coverLetter, passport, educationCertificate, policeClearance, mofaAttestation`);
         }
         
-        console.log(`Uploading to Cloudinary with params:`, JSON.stringify({
+        console.log(`[${fileType}] Uploading to Cloudinary:`, JSON.stringify({
           folder: uploadParams.folder,
           resource_type: uploadParams.resource_type,
-          public_id: uploadParams.public_id
+          public_id: uploadParams.public_id?.substring(0, 50) + '...'
         }));
+        
+        // Set up upload with timeout
+        const uploadTimeout = setTimeout(() => {
+          if (!res.headersSent) {
+            console.error(`[${fileType}] Upload timeout after 60 seconds`);
+            return res.status(500).json({
+              success: false,
+              message: "Upload timeout. File may be too large. Please try again.",
+              error: "UPLOAD_TIMEOUT"
+            });
+          }
+        }, 60000); // 60 second timeout
         
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,
           (error, result) => {
+            clearTimeout(uploadTimeout);
+            
             if (error) {
-              console.error('Cloudinary upload error:', error);
+              console.error(`[${fileType}] Cloudinary upload error:`, {
+                message: error.message,
+                http_code: error.http_code,
+                name: error.name
+              });
               // Ensure we send JSON response, not HTML
               if (!res.headersSent) {
                 return res.status(500).json({
                   success: false,
                   message: "Failed to upload file to Cloudinary",
-                  error: error.message || "Upload failed"
+                  error: error.message || "Upload failed",
+                  errorCode: error.http_code || error.name,
+                  fileType: fileType
                 });
               }
               return;
             }
 
             if (!result || !result.secure_url) {
-              console.error('Cloudinary upload failed - No URL returned');
+              console.error(`[${fileType}] Cloudinary upload failed - No URL returned. Result:`, result);
               if (!res.headersSent) {
                 return res.status(500).json({
                   success: false,
-                  message: "Upload completed but no URL returned",
-                  error: "UPLOAD_FAILED"
+                  message: "Upload completed but no URL returned from Cloudinary",
+                  error: "UPLOAD_FAILED",
+                  fileType: fileType
                 });
               }
               return;
@@ -362,19 +395,26 @@ const dynamicUploadMiddleware = (req, res, next) => {
             req.file.public_id = result.public_id;
             req.file.size = compressedBuffer.length; // Update size to compressed size
             
-            console.log('File uploaded successfully to Cloudinary');
+            console.log(`[${fileType}] File uploaded successfully to Cloudinary: ${result.secure_url.substring(0, 50)}...`);
             next();
           }
         );
 
         // Handle stream errors
         uploadStream.on('error', (streamError) => {
-          console.error('Upload stream error:', streamError);
+          clearTimeout(uploadTimeout);
+          console.error(`[${fileType}] Upload stream error:`, {
+            message: streamError.message,
+            code: streamError.code,
+            stack: streamError.stack
+          });
           if (!res.headersSent) {
             return res.status(500).json({
               success: false,
-              message: "Error uploading file stream",
-              error: streamError.message || "Stream error"
+              message: "Error uploading file stream to Cloudinary",
+              error: streamError.message || "Stream error",
+              errorCode: streamError.code,
+              fileType: fileType
             });
           }
         });
@@ -383,16 +423,38 @@ const dynamicUploadMiddleware = (req, res, next) => {
         const bufferStream = new Readable();
         bufferStream.push(compressedBuffer);
         bufferStream.push(null);
+        
+        bufferStream.on('error', (bufferError) => {
+          clearTimeout(uploadTimeout);
+          console.error(`[${fileType}] Buffer stream error:`, bufferError);
+          if (!res.headersSent) {
+            return res.status(500).json({
+              success: false,
+              message: "Error reading file buffer",
+              error: bufferError.message || "Buffer error",
+              fileType: fileType
+            });
+          }
+        });
+        
         bufferStream.pipe(uploadStream);
       } catch (compressionError) {
-        console.error('Compression/upload error:', compressionError);
+        console.error(`[${fileType}] Compression/upload error:`, {
+          message: compressionError.message,
+          stack: compressionError.stack,
+          name: compressionError.name
+        });
         // Ensure we send JSON response, not HTML
         if (!res.headersSent) {
           return res.status(500).json({
             success: false,
             message: "Error processing file",
             error: compressionError.message || "Processing error",
-            stack: process.env.NODE_ENV === 'development' ? compressionError.stack : undefined
+            errorType: compressionError.name || "UNKNOWN_ERROR",
+            fileType: fileType,
+            ...(process.env.NODE_ENV === 'development' && { 
+              stack: compressionError.stack 
+            })
           });
         }
       }
