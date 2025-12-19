@@ -30,6 +30,11 @@ mainadminRoute.put("/updateplan/:id", planController.updatePlan);
 mainadminRoute.delete("/deleteplan/:id", planController.deletePlan);
 
 /* ────────────────────────────────────────────────
+   💳 EMPLOYEE PLAN ACTIVATION (ADMIN)
+──────────────────────────────────────────────── */
+mainadminRoute.post("/activate-employee-plan", adminfunction.activateEmployeePlan);
+
+/* ────────────────────────────────────────────────
    🧾 EMPLOYER & EMPLOYEE APPROVALS
 ──────────────────────────────────────────────── */
 mainadminRoute.put("/approveemployer/:id", adminfunction.approveSingleEmployer);

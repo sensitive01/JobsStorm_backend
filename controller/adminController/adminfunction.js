@@ -853,3 +853,157 @@ exports.deleteBlogData = async (req, res) => {
     });
   }
 };
+
+// Activate employee subscription plan (Admin function)
+exports.activateEmployeePlan = async (req, res) => {
+  try {
+    const { employeeId, planId } = req.body;
+
+    // Validate input
+    if (!employeeId || !planId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID and Plan ID are required"
+      });
+    }
+
+    // Import required models
+    const EmployeePlan = require("../../models/employeePlansSchema");
+    const mongoose = require("mongoose");
+
+    // Find employee
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found"
+      });
+    }
+
+    // Find plan by _id or planId
+    const plan = await EmployeePlan.findOne({
+      $or: [
+        { _id: mongoose.isValidObjectId(planId) ? planId : new mongoose.Types.ObjectId() },
+        { planId: planId }
+      ],
+      isActive: true
+    });
+
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: "Plan not found or inactive"
+      });
+    }
+
+    // Calculate subscription dates
+    const currentDate = new Date();
+    let startDate = currentDate;
+
+    // If employee has active subscription, extend from end date
+    if (employee.subscription?.status === "active" && employee.subscription.endDate) {
+      const currentEnd = new Date(employee.subscription.endDate);
+      if (currentEnd > currentDate) {
+        startDate = currentEnd;
+      }
+    }
+
+    // Calculate end date based on plan validity
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + plan.validityMonths);
+
+    // Generate unique card number (matching orderController implementation)
+    const crypto = require("crypto");
+    async function generateUniqueCardNumber() {
+      const randomDigits = (length) => {
+        const min = Math.pow(10, length - 1);
+        const max = Math.pow(10, length) - 1;
+        return crypto.randomInt(min, max + 1).toString();
+      };
+
+      let cardNumber = null;
+      let prefix = 45;
+      let attempts = 0;
+      const maxAttempts = 200;
+
+      while (!cardNumber && attempts < maxAttempts) {
+        const randomPart = randomDigits(10);
+        const number = `${prefix}${randomPart}`;
+
+        const found = await Employee.findOne({ "subscription.cardNumber": number });
+        if (!found) {
+          cardNumber = number;
+          console.log(`✅ Generated unique card number: ${cardNumber}`);
+        } else {
+          if (attempts % 10 === 0) prefix++;
+        }
+        attempts++;
+      }
+
+      if (!cardNumber) {
+        throw new Error("Failed to generate unique card number after maximum attempts");
+      }
+
+      return cardNumber;
+    }
+
+    const cardNumber = await generateUniqueCardNumber();
+
+    // Calculate expiry from subscription end date
+    const expiryMonth = (endDate.getMonth() + 1).toString().padStart(2, "0");
+    const expiryYear = endDate.getFullYear().toString();
+
+    // Check if subscription is active (not expired)
+    const isNotExpired = endDate > currentDate;
+
+    // Update employee subscription
+    employee.subscription = {
+      planType: plan.planId || plan._id.toString(),
+      startDate: startDate,
+      endDate: endDate,
+      status: isNotExpired ? "active" : "expired",
+      cardNumber: cardNumber,
+      expiryMonth: expiryMonth,
+      expiryYear: expiryYear,
+      issuedAt: startDate,
+      paymentId: `ADMIN_${Date.now()}`, // Mark as admin-activated
+      amount: plan.totalAmount || plan.amount || 0,
+      immediateInterviewCall: plan.features?.immediateInterviewCall || false,
+    };
+
+    employee.subscriptionActive = isNotExpired && employee.subscription.status === "active";
+    await employee.save();
+
+    console.log(`✅ Admin activated plan "${plan.name}" for employee: ${employee.userName || employeeId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Plan "${plan.name}" activated successfully for employee`,
+      data: {
+        employeeId: employee._id,
+        employeeName: employee.userName,
+        planId: plan._id,
+        planName: plan.name,
+        subscription: {
+          planType: employee.subscription.planType,
+          startDate: employee.subscription.startDate,
+          endDate: employee.subscription.endDate,
+          status: employee.subscription.status,
+          cardNumber: employee.subscription.cardNumber,
+          expiryMonth: employee.subscription.expiryMonth,
+          expiryYear: employee.subscription.expiryYear,
+          immediateInterviewCall: employee.subscription.immediateInterviewCall
+        },
+        subscriptionActive: employee.subscriptionActive
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error activating employee plan:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
