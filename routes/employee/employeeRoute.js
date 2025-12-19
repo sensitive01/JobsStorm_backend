@@ -163,7 +163,7 @@ const normalizeFileType = (fileType) => {
     .replace(/\s+/g, '') // Remove all spaces
     .trim();
   
-  // Map common variations to standard types
+  // Map common variations to standard types (expanded list)
   const typeMap = {
     'passport': 'passport',
     'passportpdf': 'passport',
@@ -173,6 +173,12 @@ const normalizeFileType = (fileType) => {
     'educationcertificate': 'educationCertificate',
     'educationcert': 'educationCertificate',
     'educationpdf': 'educationCertificate',
+    'educationcertificatepdf': 'educationCertificate',
+    'educationcertpdf': 'educationCertificate',
+    'edcertificate': 'educationCertificate',
+    'edcert': 'educationCertificate',
+    'certificate': 'educationCertificate', // Common abbreviation
+    'cert': 'educationCertificate',
     'police': 'policeClearance',
     'policeclearance': 'policeClearance',
     'policeclearancepdf': 'policeClearance',
@@ -193,30 +199,43 @@ const normalizeFileType = (fileType) => {
   
   // Try exact match first
   if (typeMap[normalized]) {
+    console.log(`FileType matched exactly: "${normalized}" -> "${typeMap[normalized]}"`);
     return typeMap[normalized];
   }
   
-  // Try partial match (contains)
+  // Try partial match (contains) - check if normalized contains any key
   for (const [key, value] of Object.entries(typeMap)) {
     if (normalized.includes(key) || key.includes(normalized)) {
+      console.log(`FileType matched partially: "${normalized}" (contains "${key}") -> "${value}"`);
       return value;
     }
   }
   
   // If still not found, try to extract the main word
-  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover'];
+  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover', 'certificate', 'cert'];
   for (const word of mainWords) {
     if (normalized.includes(word)) {
-      if (word === 'education') return 'educationCertificate';
-      if (word === 'police') return 'policeClearance';
-      if (word === 'mofa') return 'mofaAttestation';
-      if (word === 'profile') return 'profileImage';
-      if (word === 'cover') return 'coverLetter';
-      return word;
+      let result;
+      if (word === 'education' || word === 'certificate' || word === 'cert') {
+        result = 'educationCertificate';
+      } else if (word === 'police') {
+        result = 'policeClearance';
+      } else if (word === 'mofa') {
+        result = 'mofaAttestation';
+      } else if (word === 'profile') {
+        result = 'profileImage';
+      } else if (word === 'cover') {
+        result = 'coverLetter';
+      } else {
+        result = word;
+      }
+      console.log(`FileType matched by main word: "${normalized}" (contains "${word}") -> "${result}"`);
+      return result;
     }
   }
   
   // Return as-is if nothing matches (might be a valid type)
+  console.log(`FileType not matched, returning as-is: "${normalized}"`);
   return normalized;
 };
 
@@ -293,8 +312,15 @@ const dynamicUploadMiddleware = (req, res, next) => {
         const uploadParams = getCloudinaryParams(req, req.file, fileType);
         
         if (!uploadParams) {
-          throw new Error(`Invalid file type: ${fileType}`);
+          console.error(`Failed to get Cloudinary params for fileType: ${fileType}`);
+          throw new Error(`Invalid file type: ${fileType}. Please use one of: profileImage, resume, coverLetter, passport, educationCertificate, policeClearance, mofaAttestation`);
         }
+        
+        console.log(`Uploading to Cloudinary with params:`, JSON.stringify({
+          folder: uploadParams.folder,
+          resource_type: uploadParams.resource_type,
+          public_id: uploadParams.public_id
+        }));
         
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,

@@ -424,7 +424,7 @@ const normalizeFileType = (fileType) => {
     .replace(/\s+/g, '') // Remove all spaces
     .trim();
   
-  // Map common variations to standard types
+  // Map common variations to standard types (expanded list)
   const typeMap = {
     'passport': 'passport',
     'passportpdf': 'passport',
@@ -434,6 +434,12 @@ const normalizeFileType = (fileType) => {
     'educationcertificate': 'educationCertificate',
     'educationcert': 'educationCertificate',
     'educationpdf': 'educationCertificate',
+    'educationcertificatepdf': 'educationCertificate',
+    'educationcertpdf': 'educationCertificate',
+    'edcertificate': 'educationCertificate',
+    'edcert': 'educationCertificate',
+    'certificate': 'educationCertificate', // Common abbreviation
+    'cert': 'educationCertificate',
     'police': 'policeClearance',
     'policeclearance': 'policeClearance',
     'policeclearancepdf': 'policeClearance',
@@ -457,7 +463,7 @@ const normalizeFileType = (fileType) => {
     return typeMap[normalized];
   }
   
-  // Try partial match (contains)
+  // Try partial match (contains) - check if normalized contains any key
   for (const [key, value] of Object.entries(typeMap)) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return value;
@@ -465,14 +471,20 @@ const normalizeFileType = (fileType) => {
   }
   
   // If still not found, try to extract the main word
-  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover'];
+  const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover', 'certificate', 'cert'];
   for (const word of mainWords) {
     if (normalized.includes(word)) {
-      if (word === 'education') return 'educationCertificate';
-      if (word === 'police') return 'policeClearance';
-      if (word === 'mofa') return 'mofaAttestation';
-      if (word === 'profile') return 'profileImage';
-      if (word === 'cover') return 'coverLetter';
+      if (word === 'education' || word === 'certificate' || word === 'cert') {
+        return 'educationCertificate';
+      } else if (word === 'police') {
+        return 'policeClearance';
+      } else if (word === 'mofa') {
+        return 'mofaAttestation';
+      } else if (word === 'profile') {
+        return 'profileImage';
+      } else if (word === 'cover') {
+        return 'coverLetter';
+      }
       return word;
     }
   }
@@ -670,7 +682,10 @@ const uploadFile = async (req, res) => {
 
     // Prepare field update
     let updateField;
-    console.log('Preparing to update field for file type:', fileType);
+    
+    // Ensure fileType is normalized (trim and handle case)
+    fileType = String(fileType).trim();
+    console.log('Preparing to update field for file type:', fileType, '(type:', typeof fileType, ')');
     
     try {
       switch (fileType) {

@@ -1,4 +1,12 @@
-const sharp = require('sharp');
+// Try to require sharp, but handle gracefully if it fails
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  console.warn('⚠️ Sharp library not available. Image compression will be disabled.');
+  console.warn('To enable compression, run: npm install sharp');
+  sharp = null;
+}
 const fs = require('fs');
 const path = require('path');
 
@@ -12,6 +20,12 @@ const path = require('path');
  * @returns {Promise<Buffer>} Compressed image buffer
  */
 const compressImage = async (imageBuffer, mimetype, maxWidth = 1920, maxHeight = 1920, quality = 85) => {
+  // If Sharp is not available, return original buffer
+  if (!sharp) {
+    console.warn('Sharp not available, skipping image compression');
+    return imageBuffer;
+  }
+  
   try {
     let sharpInstance = sharp(imageBuffer);
 
@@ -85,8 +99,9 @@ const compressImage = async (imageBuffer, mimetype, maxWidth = 1920, maxHeight =
         .toBuffer();
     }
   } catch (error) {
-    console.error('Image compression error:', error);
+    console.error('Image compression error:', error.message);
     // Return original buffer if compression fails
+    console.warn('Returning original image without compression');
     return imageBuffer;
   }
 };
