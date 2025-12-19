@@ -1755,7 +1755,8 @@ const bookDemoSchedule = async (req, res) => {
 const editUserData = async (req, res) => {
   try {
     const userId = req.params.userId;
-    console.log(req.body);
+    console.log('Edit user data request for userId:', userId);
+    console.log('Files received:', req.files ? Object.keys(req.files) : 'No files');
 
     // Access text fields from FormData
     const body = req.body;
@@ -1872,10 +1873,39 @@ const editUserData = async (req, res) => {
       data: updatedEmployee,
     });
   } catch (err) {
-    console.error("Error updating user:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Server error", error: err.message });
+    console.error("Error updating user:", {
+      error: err.message,
+      stack: err.stack,
+      userId: req.params.userId,
+      files: req.files ? Object.keys(req.files) : 'No files'
+    });
+    
+    // Handle specific error types
+    let statusCode = 500;
+    let errorMessage = "Server error";
+    
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      statusCode = 400;
+      errorMessage = "File size exceeds the 50MB limit. Please compress your file and try again.";
+    } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      statusCode = 400;
+      errorMessage = "Unexpected file field. Please check your file upload fields.";
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+    
+    // Ensure we always send JSON response
+    if (!res.headersSent) {
+      res.status(statusCode).json({ 
+        success: false, 
+        message: errorMessage, 
+        error: err.code || err.name || "UPDATE_ERROR",
+        ...(process.env.NODE_ENV === 'development' && { 
+          details: err.message,
+          stack: err.stack 
+        })
+      });
+    }
   }
 };
 

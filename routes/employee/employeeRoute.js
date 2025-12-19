@@ -28,9 +28,15 @@ const {
 } = require("../../config/cloudinary");
 
 // ===============================
-// Default Multer (Local Upload)
+// Default Multer (Local Upload) - Increased file size limit
 // ===============================
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ 
+  dest: "uploads/",
+  limits: { 
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+    fieldSize: 50 * 1024 * 1024  // 50MB for fields
+  }
+});
 
 // ===============================
 // Helper: Select Cloudinary Storage by FileType
@@ -499,8 +505,8 @@ employeeRoute.post("/sendemailotp", emailverifycontroller.sendOtpToEmail);
 employeeRoute.post("/verifyemailotp", emailverifycontroller.verifyEmailOtp);
 employeeRoute.post("/change-password", employeeController.userChangePassword);
 employeeRoute.post("/book-my-demo", employeeController.bookDemoSchedule);
-employeeRoute.post(
-  "/edit-form-data/:userId",
+// Middleware to handle file upload errors for edit profile
+const handleEditProfileUpload = (req, res, next) => {
   upload.fields([
     { name: "userProfilePic", maxCount: 1 },
     { name: "resume", maxCount: 1 },
@@ -509,7 +515,37 @@ employeeRoute.post(
     { name: "educationCertificate", maxCount: 1 },
     { name: "policeClearance", maxCount: 1 },
     { name: "mofaAttestation", maxCount: 1 },
-  ]),
+  ])(req, res, (err) => {
+    if (err) {
+      console.error('File upload error in edit profile:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: "File size exceeds 50MB limit. Please compress your file and try again.",
+          error: "FILE_TOO_LARGE",
+          maxSize: "50MB"
+        });
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({
+          success: false,
+          message: "Unexpected file field. Please check your file upload fields.",
+          error: "UNEXPECTED_FILE_FIELD"
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "File upload failed",
+        error: err.message || "UPLOAD_ERROR"
+      });
+    }
+    next();
+  });
+};
+
+employeeRoute.post(
+  "/edit-form-data/:userId",
+  handleEditProfileUpload,
   employeeController.editUserData
 );
 employeeRoute.post(
