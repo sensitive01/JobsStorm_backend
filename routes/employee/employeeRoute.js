@@ -1,6 +1,9 @@
 const express = require("express");
 const multer = require("multer");
 const employeeRoute = express.Router();
+const { compressFile } = require("../../utils/fileCompression");
+const { cloudinary } = require("../../config/cloudinary");
+const { Readable } = require("stream");
 
 // ===============================
 // Controllers
@@ -50,21 +53,86 @@ const getStorage = (fileType) => {
 };
 
 // ===============================
-// Dynamic Upload Middleware
+// Helper: Get Cloudinary upload params by fileType
+// ===============================
+const getCloudinaryParams = (req, file, fileType) => {
+  const timestamp = Date.now();
+  const originalName = file.originalname.replace(/\.[^/.]+$/, "");
+  const employid = req.params.employid || req.params.employeeId || req.body.employeeId;
+  
+  const baseParams = {
+    public_id: `${employid}_${fileType}_${originalName}_${timestamp}`,
+  };
+
+  switch (fileType) {
+    case "profileImage":
+      return {
+        ...baseParams,
+        folder: 'employee_profile_images',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 1200, height: 1200, crop: 'limit', quality: 'auto:good' }
+        ],
+      };
+    case "resume":
+      return {
+        ...baseParams,
+        folder: 'employee_resumes',
+        resource_type: 'raw',
+        format: 'pdf',
+        flags: 'attachment',
+      };
+    case "coverLetter":
+      return {
+        ...baseParams,
+        folder: 'employee_cover_letters',
+        resource_type: 'raw',
+        format: 'pdf',
+        flags: 'attachment',
+      };
+    case "profileVideo":
+      return {
+        ...baseParams,
+        folder: 'profileVideos',
+        resource_type: 'video',
+        chunk_size: 100 * 1024 * 1024,
+        eager: [
+          { width: 1280, height: 720, crop: 'limit', video_codec: 'h264', format: 'mp4' }
+        ],
+      };
+    case "audio":
+      return {
+        ...baseParams,
+        folder: 'audioFiles',
+        resource_type: 'video',
+        format: 'mp3',
+        audio_codec: 'aac',
+        audio_bit_rate: '128k',
+      };
+    default:
+      return baseParams;
+  }
+};
+
+// ===============================
+// Dynamic Upload Middleware with Compression
 // ===============================
 const dynamicUploadMiddleware = (req, res, next) => {
   const fileType =
     req.query.fileType || req.headers["filetype"] || req.body.fileType;
 
-  const storage = getStorage(fileType);
-
-  if (!storage) {
+  if (!fileType) {
     return res.status(400).json({ message: "Invalid or missing fileType" });
   }
 
+  // Use memory storage to get file buffer for compression
+  const memoryStorage = multer.memoryStorage();
   const upload = multer({
-    storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    storage: memoryStorage,
+    limits: { 
+      fileSize: 50 * 1024 * 1024, // 50MB limit (increased for large files before compression)
+    },
   }).single("file");
 
   upload(req, res, (err) => {
@@ -72,13 +140,74 @@ const dynamicUploadMiddleware = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res
           .status(400)
-          .json({ message: "File size exceeds 10MB limit" });
+          .json({ message: "File size exceeds 50MB limit" });
       }
       return res
         .status(500)
         .json({ message: "Upload error", error: err.message });
     }
-    next();
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Compress and upload asynchronously
+    (async () => {
+      try {
+        // Compress the file before uploading to Cloudinary
+        console.log(`Compressing ${fileType} file: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB)`);
+        
+        const compressedBuffer = await compressFile(
+          req.file.buffer,
+          req.file.mimetype,
+          {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 85,
+            maxFileSize: 5 * 1024 * 1024 // Compress if > 5MB
+          }
+        );
+
+        console.log(`Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
+
+        // Upload compressed file to Cloudinary
+        const uploadParams = getCloudinaryParams(req, req.file, fileType);
+        
+        const uploadStream = cloudinary.uploader.upload_stream(
+          uploadParams,
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary upload error:', error);
+              return res.status(500).json({
+                message: "Failed to upload file to Cloudinary",
+                error: error.message
+              });
+            }
+
+            // Attach Cloudinary result to req.file for controller
+            req.file.secure_url = result.secure_url;
+            req.file.url = result.secure_url;
+            req.file.public_id = result.public_id;
+            req.file.size = compressedBuffer.length; // Update size to compressed size
+            
+            console.log('File uploaded successfully to Cloudinary');
+            next();
+          }
+        );
+
+        // Create a readable stream from buffer and pipe to Cloudinary
+        const bufferStream = new Readable();
+        bufferStream.push(compressedBuffer);
+        bufferStream.push(null);
+        bufferStream.pipe(uploadStream);
+      } catch (compressionError) {
+        console.error('Compression/upload error:', compressionError);
+        return res.status(500).json({
+          message: "Error processing file",
+          error: compressionError.message
+        });
+      }
+    })();
   });
 };
 

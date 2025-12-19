@@ -7,6 +7,9 @@ cloudinary.config({
    cloud_name: process.env.CLOUDINARY_NAME,
    api_key: process.env.CLOUDINARY_API_KEY,
    api_secret: process.env.CLOUDINARY_API_SECRET,
+   // Increase timeout for large file uploads
+   timeout: 60000, // 60 seconds
+   chunk_size: 20 * 1024 * 1024, // 20MB chunks for large files
 });
 
 const generatePublicId = (req, file, prefix) => {
@@ -199,13 +202,18 @@ const audioStorage = new CloudinaryStorage({
   }),
 });
 
-const uploadImage = async (imageBuffer, folder) => {
+const uploadImage = async (imageBuffer, folder, options = {}) => {
   return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      folder: folder, 
+      resource_type: "auto",
+      timeout: 60000, // 60 seconds timeout
+      chunk_size: 20 * 1024 * 1024, // 20MB chunks
+      ...options
+    };
+    
     cloudinary.uploader.upload_stream(
-      {
-        folder: folder, 
-        resource_type: "auto",
-      },
+      uploadOptions,
       (error, result) => {
         if (error) {
           return reject(new Error("Cloudinary upload failed: " + error.message));

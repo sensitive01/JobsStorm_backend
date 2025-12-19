@@ -22,8 +22,15 @@ initializeAdmin();
 
 
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Increase body parser limits for large file uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
+// Increase timeout for long-running requests (file uploads)
+app.use((req, res, next) => {
+  req.setTimeout(300000); // 5 minutes timeout
+  res.setTimeout(300000);
+  next();
+});
 
 const allowedOrigins = ["http://localhost:5174","https://www.jobsstorm.com", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com","https://secure.payu.in"];
 const corsOptions = {
