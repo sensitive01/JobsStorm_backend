@@ -494,17 +494,34 @@ const normalizeFileType = (fileType) => {
 };
 
 const uploadFile = async (req, res) => {
-  console.log('Starting file upload process...');
+  console.log('='.repeat(80));
+  console.log('🚀 UPLOAD FILE CONTROLLER - START');
+  console.log('='.repeat(80));
+  console.log('Timestamp:', new Date().toISOString());
+  
   try {
     const { employid } = req.params;
     let fileType = req.query.fileType || req.body.fileType;
     
+    console.log('📋 Request details:');
+    console.log('  - Employee ID:', employid);
+    console.log('  - File Type (raw):', fileType);
+    
     // Normalize the fileType
     fileType = normalizeFileType(fileType);
 
-    console.log(`Upload request received - Employee ID: ${employid}, File Type: ${fileType} (normalized)`);
-    console.log('Request files:', req.file ? 'File received' : 'No file found');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log(`✅ File Type (normalized): ${fileType}`);
+    console.log('📁 File info:', req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: `${(req.file.size / 1024).toFixed(2)}KB`,
+      hasBuffer: !!req.file.buffer,
+      hasUrl: !!(req.file.secure_url || req.file.url)
+    } : 'No file found');
+    
+    if (req.body && Object.keys(req.body).length > 0) {
+      console.log('📦 Request body keys:', Object.keys(req.body));
+    }
 
     // Validate inputs
     if (!employid || !mongoose.isValidObjectId(employid)) {
@@ -828,10 +845,18 @@ const uploadFile = async (req, res) => {
         message: "File uploaded and saved successfully"
       };
       
-      console.log('Upload completed successfully:', JSON.stringify(response, null, 2));
+      console.log('='.repeat(80));
+      console.log('✅ UPLOAD COMPLETED SUCCESSFULLY');
+      console.log('='.repeat(80));
+      console.log('Response:', JSON.stringify(response, null, 2));
+      console.log('='.repeat(80));
+      
       res.status(200).json(response);
       
     } catch (updateError) {
+      console.log('='.repeat(80));
+      console.log('❌ ERROR IN UPLOAD FILE CONTROLLER');
+      console.log('='.repeat(80));
       console.error(`[${fileType}] Error updating employee document:`, {
         error: updateError.message,
         stack: updateError.stack,
@@ -882,22 +907,33 @@ const uploadFile = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Error in file upload process:", {
-      error: error.message,
+    console.log('='.repeat(80));
+    console.log('❌❌❌ CRITICAL ERROR IN UPLOAD FILE PROCESS ❌❌❌');
+    console.log('='.repeat(80));
+    console.error("Error details:", {
+      name: error.name,
+      message: error.message,
+      code: error.code,
       stack: error.stack,
       timestamp: new Date().toISOString(),
+    });
+    console.error("Request details:", {
+      params: req.params,
+      query: req.query,
+      bodyKeys: Object.keys(req.body || {}),
       fileInfo: req.file ? {
         originalname: req.file.originalname,
         mimetype: req.file.mimetype,
-        size: req.file.size
-      } : 'No file data',
-      params: req.params,
-      query: req.query,
-      body: req.body
+        size: req.file.size,
+        hasBuffer: !!req.file.buffer,
+        hasUrl: !!(req.file.secure_url || req.file.url)
+      } : 'No file data'
     });
+    console.log('='.repeat(80));
     
     // Ensure we always send JSON response, never HTML
     if (!res.headersSent) {
+      console.log('📤 Sending error response to client');
       res.status(500).json({
         success: false,
         message: "An unexpected error occurred during file upload",
@@ -908,8 +944,9 @@ const uploadFile = async (req, res) => {
         })
       });
     } else {
-      console.error('Response already sent, cannot send error response');
+      console.error('⚠️ Response already sent, cannot send error response');
     }
+    console.log('='.repeat(80));
   }
 };
 

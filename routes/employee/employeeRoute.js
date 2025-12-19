@@ -249,16 +249,29 @@ const normalizeFileType = (fileType) => {
 // Dynamic Upload Middleware with Compression
 // ===============================
 const dynamicUploadMiddleware = (req, res, next) => {
+  console.log('='.repeat(80));
+  console.log('📤 UPLOAD REQUEST RECEIVED');
+  console.log('='.repeat(80));
+  console.log('URL:', req.url);
+  console.log('Method:', req.method);
+  console.log('Params:', JSON.stringify(req.params));
+  console.log('Query:', JSON.stringify(req.query));
+  console.log('Body keys:', Object.keys(req.body || {}));
+  console.log('Headers filetype:', req.headers["filetype"]);
+  
   let fileType =
     req.query.fileType || req.headers["filetype"] || req.body.fileType;
+
+  console.log('🔍 Original fileType:', fileType);
 
   // Normalize the fileType
   const originalFileType = fileType;
   fileType = normalizeFileType(fileType);
   
-  console.log(`FileType normalization: "${originalFileType}" -> "${fileType}"`);
+  console.log(`✅ FileType normalization: "${originalFileType}" -> "${fileType}"`);
 
   if (!fileType) {
+    console.error('❌ Invalid or missing fileType');
     return res.status(400).json({ 
       success: false,
       message: "Invalid or missing fileType",
@@ -269,6 +282,8 @@ const dynamicUploadMiddleware = (req, res, next) => {
   // Store normalized fileType in request for controller to use
   req.body.fileType = fileType;
   req.query.fileType = fileType;
+  
+  console.log('📝 Stored normalized fileType in request');
 
   // Use memory storage to get file buffer for compression
   const memoryStorage = multer.memoryStorage();
@@ -281,19 +296,50 @@ const dynamicUploadMiddleware = (req, res, next) => {
 
   upload(req, res, (err) => {
     if (err) {
+      console.error('❌ Multer upload error:', {
+        code: err.code,
+        message: err.message,
+        field: err.field,
+        name: err.name,
+        stack: err.stack
+      });
+      
       if (err.code === "LIMIT_FILE_SIZE") {
+        console.error('❌ File size limit exceeded');
         return res
           .status(400)
-          .json({ message: "File size exceeds 50MB limit" });
+          .json({ 
+            success: false,
+            message: "File size exceeds 50MB limit",
+            error: "LIMIT_FILE_SIZE"
+          });
       }
+      
+      console.error('❌ Unknown upload error:', err);
       return res
         .status(500)
-        .json({ message: "Upload error", error: err.message });
+        .json({ 
+          success: false,
+          message: "Upload error", 
+          error: err.message,
+          code: err.code
+        });
     }
 
     if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      console.error('❌ No file uploaded in request');
+      return res.status(400).json({ 
+        success: false,
+        message: "No file uploaded" 
+      });
     }
+    
+    console.log('✅ File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: `${(req.file.size / 1024).toFixed(2)}KB`,
+      encoding: req.file.encoding
+    });
 
     // Compress and upload asynchronously
     (async () => {
@@ -395,7 +441,8 @@ const dynamicUploadMiddleware = (req, res, next) => {
             req.file.public_id = result.public_id;
             req.file.size = compressedBuffer.length; // Update size to compressed size
             
-            console.log(`[${fileType}] File uploaded successfully to Cloudinary: ${result.secure_url.substring(0, 50)}...`);
+            console.log(`[${fileType}] ✅ File uploaded successfully to Cloudinary: ${result.secure_url.substring(0, 50)}...`);
+            console.log(`[${fileType}] 📤 Proceeding to controller...`);
             next();
           }
         );
@@ -439,13 +486,26 @@ const dynamicUploadMiddleware = (req, res, next) => {
         
         bufferStream.pipe(uploadStream);
       } catch (compressionError) {
-        console.error(`[${fileType}] Compression/upload error:`, {
+        console.log('='.repeat(80));
+        console.error(`[${fileType}] ❌❌❌ COMPRESSION/UPLOAD ERROR ❌❌❌`);
+        console.log('='.repeat(80));
+        console.error("Error details:", {
+          name: compressionError.name,
           message: compressionError.message,
-          stack: compressionError.stack,
-          name: compressionError.name
+          code: compressionError.code,
+          stack: compressionError.stack
         });
+        console.error("File info:", {
+          originalname: req.file?.originalname,
+          mimetype: req.file?.mimetype,
+          size: req.file?.size,
+          hasBuffer: !!req.file?.buffer
+        });
+        console.log('='.repeat(80));
+        
         // Ensure we send JSON response, not HTML
         if (!res.headersSent) {
+          console.log(`[${fileType}] 📤 Sending error response to client`);
           return res.status(500).json({
             success: false,
             message: "Error processing file",
@@ -456,7 +516,10 @@ const dynamicUploadMiddleware = (req, res, next) => {
               stack: compressionError.stack 
             })
           });
+        } else {
+          console.error(`[${fileType}] ⚠️ Response already sent, cannot send error response`);
         }
+        console.log('='.repeat(80));
       }
     })();
   });
