@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const path = require("path");
 const employeeRoute = express.Router();
 const { compressFile } = require("../../utils/fileCompression");
 const { cloudinary } = require("../../config/cloudinary");
@@ -101,28 +102,32 @@ const getCloudinaryParams = (req, file, fileType) => {
       return {
         ...baseParams,
         folder: 'employee_passports',
-        resource_type: 'auto', // Can be image or PDF
+        resource_type: 'raw', // PDF only
+        format: 'pdf',
         flags: 'attachment',
       };
     case "educationCertificate":
       return {
         ...baseParams,
         folder: 'employee_education_certificates',
-        resource_type: 'auto', // Can be image or PDF
+        resource_type: 'raw', // PDF only
+        format: 'pdf',
         flags: 'attachment',
       };
     case "policeClearance":
       return {
         ...baseParams,
         folder: 'employee_police_clearance',
-        resource_type: 'auto', // Can be image or PDF
+        resource_type: 'raw', // PDF only
+        format: 'pdf',
         flags: 'attachment',
       };
     case "mofaAttestation":
       return {
         ...baseParams,
         folder: 'employee_mofa_attestation',
-        resource_type: 'auto', // Can be image or PDF
+        resource_type: 'raw', // PDF only
+        format: 'pdf',
         flags: 'attachment',
       };
     case "profileVideo":
@@ -285,10 +290,90 @@ const dynamicUploadMiddleware = (req, res, next) => {
   
   console.log('📝 Stored normalized fileType in request');
 
+  // Define allowed file types for each fileType
+  const allowedFileTypes = {
+    profileImage: {
+      mimetypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+      extensions: ['.jpg', '.jpeg', '.png', '.webp', '.gif'],
+      description: 'image files (JPG, PNG, WebP, GIF)'
+    },
+    profileVideo: {
+      mimetypes: ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'],
+      extensions: ['.mp4', '.mov', '.avi', '.webm', '.mpeg'],
+      description: 'video files (MP4, MOV, AVI, WebM)'
+    },
+    audio: {
+      mimetypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg'],
+      extensions: ['.mp3', '.wav', '.m4a', '.aac', '.ogg'],
+      description: 'audio files (MP3, WAV, M4A, AAC)'
+    },
+    resume: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    },
+    coverLetter: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    },
+    passport: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    },
+    educationCertificate: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    },
+    policeClearance: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    },
+    mofaAttestation: {
+      mimetypes: ['application/pdf'],
+      extensions: ['.pdf'],
+      description: 'PDF files only'
+    }
+  };
+
+  // File filter function
+  const fileFilter = (req, file, cb) => {
+    const fileTypeConfig = allowedFileTypes[fileType];
+    
+    if (!fileTypeConfig) {
+      console.error(`❌ Unknown fileType: ${fileType}`);
+      return cb(new Error(`Unknown file type: ${fileType}`), false);
+    }
+
+    // Check mimetype
+    const isValidMimetype = fileTypeConfig.mimetypes.includes(file.mimetype.toLowerCase());
+    
+    // Check file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    const isValidExtension = fileTypeConfig.extensions.includes(fileExtension);
+
+    if (isValidMimetype && isValidExtension) {
+      console.log(`✅ File type validated: ${file.originalname} (${file.mimetype})`);
+      cb(null, true);
+    } else {
+      console.error(`❌ Invalid file type for ${fileType}:`, {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        extension: fileExtension,
+        allowed: fileTypeConfig.description
+      });
+      cb(new Error(`Invalid file type. ${fileType} only accepts ${fileTypeConfig.description}. Received: ${file.mimetype} (${fileExtension})`), false);
+    }
+  };
+
   // Use memory storage to get file buffer for compression
   const memoryStorage = multer.memoryStorage();
   const upload = multer({
     storage: memoryStorage,
+    fileFilter: fileFilter,
     limits: { 
       fileSize: 50 * 1024 * 1024, // 50MB limit (increased for large files before compression)
     },
@@ -312,6 +397,19 @@ const dynamicUploadMiddleware = (req, res, next) => {
             success: false,
             message: "File size exceeds 50MB limit",
             error: "LIMIT_FILE_SIZE"
+          });
+      }
+      
+      // Handle file type validation errors
+      if (err.message && err.message.includes('Invalid file type')) {
+        console.error('❌ Invalid file type uploaded');
+        return res
+          .status(400)
+          .json({ 
+            success: false,
+            message: err.message,
+            error: "INVALID_FILE_TYPE",
+            fileType: fileType
           });
       }
       

@@ -637,10 +637,30 @@ const uploadFile = async (req, res) => {
               .slice(-2)
               .join("/")
               .split(".")[0];
-            const deleteResult = await cloudinary.uploader.destroy(publicId, {
-              resource_type: "auto",
-            });
-            console.log('Old passport deletion result:', deleteResult);
+            // Try to determine resource type from URL or try both
+            const url = currentEmployee.passport.url;
+            let resourceType = 'raw'; // Default for documents
+            if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+              resourceType = 'image';
+            } else if (url.includes('/video/') || url.match(/\.(mp4|mov|avi)$/i)) {
+              resourceType = 'video';
+            }
+            
+            try {
+              const deleteResult = await cloudinary.uploader.destroy(publicId, {
+                resource_type: resourceType,
+              });
+              console.log('Old passport deletion result:', deleteResult);
+            } catch (deleteErr) {
+              // If deletion fails with one type, try the other
+              if (resourceType === 'raw') {
+                try {
+                  await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                } catch (e) {
+                  console.warn('Failed to delete passport with both raw and image types');
+                }
+              }
+            }
           }
           break;
         case "educationCertificate":
@@ -651,10 +671,28 @@ const uploadFile = async (req, res) => {
               .slice(-2)
               .join("/")
               .split(".")[0];
-            const deleteResult = await cloudinary.uploader.destroy(publicId, {
-              resource_type: "auto",
-            });
-            console.log('Old education certificate deletion result:', deleteResult);
+            // Try to determine resource type from URL
+            const url = currentEmployee.educationCertificate.url;
+            let resourceType = 'raw'; // Default for documents
+            if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+              resourceType = 'image';
+            }
+            
+            try {
+              const deleteResult = await cloudinary.uploader.destroy(publicId, {
+                resource_type: resourceType,
+              });
+              console.log('Old education certificate deletion result:', deleteResult);
+            } catch (deleteErr) {
+              // If deletion fails with one type, try the other
+              if (resourceType === 'raw') {
+                try {
+                  await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                } catch (e) {
+                  console.warn('Failed to delete education certificate with both raw and image types');
+                }
+              }
+            }
           }
           break;
         case "policeClearance":
@@ -665,10 +703,28 @@ const uploadFile = async (req, res) => {
               .slice(-2)
               .join("/")
               .split(".")[0];
-            const deleteResult = await cloudinary.uploader.destroy(publicId, {
-              resource_type: "auto",
-            });
-            console.log('Old police clearance deletion result:', deleteResult);
+            // Try to determine resource type from URL
+            const url = currentEmployee.policeClearance.url;
+            let resourceType = 'raw'; // Default for documents
+            if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+              resourceType = 'image';
+            }
+            
+            try {
+              const deleteResult = await cloudinary.uploader.destroy(publicId, {
+                resource_type: resourceType,
+              });
+              console.log('Old police clearance deletion result:', deleteResult);
+            } catch (deleteErr) {
+              // If deletion fails with one type, try the other
+              if (resourceType === 'raw') {
+                try {
+                  await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                } catch (e) {
+                  console.warn('Failed to delete police clearance with both raw and image types');
+                }
+              }
+            }
           }
           break;
         case "mofaAttestation":
@@ -679,10 +735,28 @@ const uploadFile = async (req, res) => {
               .slice(-2)
               .join("/")
               .split(".")[0];
-            const deleteResult = await cloudinary.uploader.destroy(publicId, {
-              resource_type: "auto",
-            });
-            console.log('Old MOFA attestation deletion result:', deleteResult);
+            // Try to determine resource type from URL
+            const url = currentEmployee.mofaAttestation.url;
+            let resourceType = 'raw'; // Default for documents
+            if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+              resourceType = 'image';
+            }
+            
+            try {
+              const deleteResult = await cloudinary.uploader.destroy(publicId, {
+                resource_type: resourceType,
+              });
+              console.log('Old MOFA attestation deletion result:', deleteResult);
+            } catch (deleteErr) {
+              // If deletion fails with one type, try the other
+              if (resourceType === 'raw') {
+                try {
+                  await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+                } catch (e) {
+                  console.warn('Failed to delete MOFA attestation with both raw and image types');
+                }
+              }
+            }
           }
           break;
       }
