@@ -452,6 +452,14 @@ const dynamicUploadMiddleware = (req, res, next) => {
         
         let compressedBuffer;
         try {
+          // For PDFs, don't compress (Cloudinary handles PDF optimization)
+          // For images, compress if >= 2MB to optimize upload speed
+          const isImage = req.file.mimetype.startsWith('image/');
+          const isPDF = req.file.mimetype === 'application/pdf';
+          const compressionThreshold = isImage ? 2 * 1024 * 1024 : Infinity; // 2MB for images, never compress PDFs
+          
+          console.log(`[${fileType}] File type: ${isImage ? 'Image' : isPDF ? 'PDF' : 'Other'}, Size: ${(req.file.size / 1024).toFixed(2)}KB`);
+          
           compressedBuffer = await compressFile(
             req.file.buffer,
             req.file.mimetype,
@@ -459,10 +467,12 @@ const dynamicUploadMiddleware = (req, res, next) => {
               maxWidth: 1920,
               maxHeight: 1920,
               quality: 85,
-              maxFileSize: 5 * 1024 * 1024 // Compress if > 5MB
+              maxFileSize: compressionThreshold
             }
           );
-          console.log(`[${fileType}] Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
+          
+          const compressionRatio = ((1 - compressedBuffer.length / req.file.size) * 100).toFixed(1);
+          console.log(`[${fileType}] Compression result: ${(compressedBuffer.length / 1024).toFixed(2)}KB (${compressionRatio > 0 ? compressionRatio + '% reduction' : 'no compression'})`);
         } catch (compressError) {
           console.error(`[${fileType}] Compression error:`, compressError);
           // Continue with original buffer if compression fails
@@ -484,17 +494,23 @@ const dynamicUploadMiddleware = (req, res, next) => {
           public_id: uploadParams.public_id?.substring(0, 50) + '...'
         }));
         
-        // Set up upload with timeout
+        // Set up upload with timeout (longer for larger files)
+        // Calculate timeout based on file size: 10 seconds per MB, minimum 60 seconds, maximum 5 minutes
+        const fileSizeMB = compressedBuffer.length / (1024 * 1024);
+        const timeoutMs = Math.max(60000, Math.min(300000, fileSizeMB * 10000));
+        console.log(`[${fileType}] Setting upload timeout to ${(timeoutMs / 1000).toFixed(0)} seconds for ${fileSizeMB.toFixed(2)}MB file`);
+        
         const uploadTimeout = setTimeout(() => {
           if (!res.headersSent) {
-            console.error(`[${fileType}] Upload timeout after 60 seconds`);
+            console.error(`[${fileType}] Upload timeout after ${(timeoutMs / 1000).toFixed(0)} seconds`);
             return res.status(500).json({
               success: false,
-              message: "Upload timeout. File may be too large. Please try again.",
-              error: "UPLOAD_TIMEOUT"
+              message: `Upload timeout after ${(timeoutMs / 1000).toFixed(0)} seconds. File may be too large or network is slow. Please try again.`,
+              error: "UPLOAD_TIMEOUT",
+              fileSize: `${fileSizeMB.toFixed(2)}MB`
             });
           }
-        }, 60000); // 60 second timeout
+        }, timeoutMs);
         
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,

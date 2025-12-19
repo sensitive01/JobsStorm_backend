@@ -8,7 +8,7 @@ cloudinary.config({
    api_key: process.env.CLOUDINARY_API_KEY,
    api_secret: process.env.CLOUDINARY_API_SECRET,
    // Increase timeout for large file uploads
-   timeout: 60000, // 60 seconds
+   timeout: 300000, // 5 minutes (300 seconds) for large files
    chunk_size: 20 * 1024 * 1024, // 20MB chunks for large files
 });
 

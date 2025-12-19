@@ -145,10 +145,13 @@ const compressFile = async (fileBuffer, mimetype, options = {}) => {
     } = options;
 
     // If file is already small enough, skip compression
-    if (fileBuffer.length <= maxFileSize) {
+    // Note: We compress files that are >= maxFileSize to ensure they're optimized
+    if (fileBuffer.length < maxFileSize) {
       console.log(`File size (${(fileBuffer.length / 1024).toFixed(2)}KB) is within limit, skipping compression`);
       return fileBuffer;
     }
+    
+    console.log(`File size (${(fileBuffer.length / 1024).toFixed(2)}KB) exceeds ${(maxFileSize / 1024).toFixed(2)}KB, will compress`);
 
     // Check if it's an image
     if (mimetype.startsWith('image/')) {
