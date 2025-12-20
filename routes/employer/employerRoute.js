@@ -1,6 +1,9 @@
 const express = require("express");
 const multer = require("multer");
 const employerRoute = express();
+const { compressFile } = require("../../utils/fileCompression");
+const { cloudinary } = require("../../config/cloudinary");
+const { Readable } = require("stream");
 
 const meetingController = require("../../controller/employerController/meetingController");
 const employerController = require("../../controller/employerController/employerController");
@@ -25,7 +28,10 @@ const {
 } = require("../../config/cloudinary");
 
 // Memory upload for chat
-const memoryUpload = multer({ storage: multer.memoryStorage() }).single("file");
+const memoryUpload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+}).single("file");
 
 // ===== Dynamic Upload Config =====
 const getStorage = (fileType) => {
@@ -49,22 +55,149 @@ const getStorage = (fileType) => {
   }
 };
 
+// Helper: Get Cloudinary upload params by fileType
+const getCloudinaryParamsForEmployer = (req, file, fileType) => {
+  const timestamp = Date.now();
+  const originalName = file.originalname.replace(/\.[^/.]+$/, "");
+  const employid = req.params.employid || req.body.employerId || req.body.employeeId;
+  
+  const baseParams = {
+    public_id: `${employid}_${fileType}_${originalName}_${timestamp}`,
+  };
+
+  switch (fileType) {
+    case "profileImage":
+      return {
+        ...baseParams,
+        folder: 'employer_profile_images',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 1200, height: 1200, crop: 'limit', quality: 'auto:good' }
+        ],
+      };
+    case "3":
+    case "chatImage":
+      return {
+        ...baseParams,
+        folder: 'chatimage',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 800, height: 600, crop: 'limit', quality: 'auto:good' }
+        ],
+      };
+    case "eventimage":
+      return {
+        ...baseParams,
+        folder: 'event_images',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 1600, height: 900, crop: 'limit', quality: 'auto:good' }
+        ],
+      };
+    case "send":
+      return {
+        ...baseParams,
+        folder: 'sendimage',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 1200, height: 1200, crop: 'limit', quality: 'auto:good' }
+        ],
+      };
+    default:
+      return baseParams;
+  }
+};
+
 const dynamicUploadMiddleware = (req, res, next) => {
   const fileType = req.body.fileType || req.query.fileType;
-  const storage = getStorage(fileType);
-  if (!storage) return next();
+  
+  // Use memory storage to get file buffer for compression
+  const memoryStorage = multer.memoryStorage();
+  const upload = multer({
+    storage: memoryStorage,
+    limits: { 
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+  }).single("file");
 
-  const upload = multer({ storage }).single("file");
   upload(req, res, (err) => {
-    if (err)
-      return res
-        .status(400)
-        .json({
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
           success: false,
-          message: "File upload failed",
-          error: err.message,
+          message: "File size exceeds 50MB limit",
         });
-    next();
+      }
+      return res.status(400).json({
+        success: false,
+        message: "File upload failed",
+        error: err.message,
+      });
+    }
+
+    if (!req.file) {
+      return next(); // Allow routes that don't require files
+    }
+
+    // Compress and upload asynchronously
+    (async () => {
+      try {
+        console.log(`Compressing ${fileType} file: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB)`);
+        
+        const compressedBuffer = await compressFile(
+          req.file.buffer,
+          req.file.mimetype,
+          {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 85,
+            maxFileSize: 5 * 1024 * 1024
+          }
+        );
+
+        console.log(`Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
+
+        const uploadParams = getCloudinaryParamsForEmployer(req, req.file, fileType);
+        
+        const uploadStream = cloudinary.uploader.upload_stream(
+          uploadParams,
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary upload error:', error);
+              return res.status(500).json({
+                success: false,
+                message: "Failed to upload file to Cloudinary",
+                error: error.message
+              });
+            }
+
+            req.file.secure_url = result.secure_url;
+            req.file.url = result.secure_url;
+            req.file.public_id = result.public_id;
+            req.file.size = compressedBuffer.length;
+            
+            console.log('File uploaded successfully to Cloudinary');
+            next();
+          }
+        );
+
+        const bufferStream = new Readable();
+        bufferStream.push(compressedBuffer);
+        bufferStream.push(null);
+        bufferStream.pipe(uploadStream);
+      } catch (compressionError) {
+        console.error('Compression/upload error:', compressionError);
+        return res.status(500).json({
+          success: false,
+          message: "Error processing file",
+          error: compressionError.message
+        });
+      }
+    })();
   });
 };
 
@@ -218,16 +351,6 @@ employerRoute.post("/verifyemailotp", emailverifycontroller.verifyEmailOtp);
 employerRoute.post(
   "/send-verification-otp",
   emailverifycontroller.sendVerificationEmail
-);
-
-// New Company Signup OTP APIs (Separate from old ones)
-employerRoute.post(
-  "/company-signup/send-otp",
-  emailverifycontroller.sendCompanySignupOtp
-);
-employerRoute.post(
-  "/company-signup/verify-otp",
-  emailverifycontroller.verifyCompanySignupOtp
 );
 
 employerRoute.post("/toggleSaveJob", jobController.toggleSaveJob);
