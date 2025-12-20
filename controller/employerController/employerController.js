@@ -4,10 +4,21 @@ const sendEmail = require("../../utils/sendEmail");
 const bcrypt = require("bcrypt");
 const generateOTP = require("../../utils/generateOTP");
 const userModel = require("../../models/employeeschema");
+const Employer = require("../../models/employerSchema");
+const Job = require("../../models/jobSchema");
 const jwtDecode = require("jwt-decode");
 const jwksClient = require("jwks-rsa");
 const { v4: uuidv4 } = require("uuid");
 const mongoose = require("mongoose");
+const {
+  cloudinary,
+  profileImageStorage,
+} = require("../../config/cloudinary");
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const appleKeysClient = jwksClient({
+  jwksUri: "https://appleid.apple.com/auth/keys",
+});
 
 // Helper: Normalize email
 const normalizeEmail = (email) => email?.trim().toLowerCase();
@@ -434,9 +445,630 @@ const verifyCompanySignupOtp = async (req, res) => {
   }
 };
 
+// Get employer details by ID
+const getEmployerDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: "Employer ID is required" });
+    }
+
+    const employer = await Employer.findById(id).select("-password");
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    res.json(employer);
+  } catch (err) {
+    console.error("Error fetching employer details:", err);
+    if (err.kind === "ObjectId") {
+      return res.status(400).json({ message: "Invalid employer ID format" });
+    }
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// List all employers
+const listAllEmployees = async (req, res) => {
+  try {
+    const employers = await Employer.find().select("-password");
+    res.status(200).json(employers);
+  } catch (error) {
+    console.error("Error fetching employers:", error);
+    res.status(500).json({ message: "Failed to fetch employers" });
+  }
+};
+
+// Get referral link
+const getReferralLink = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const employer = await Employer.findById(userId);
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    if (!employer.referralCode) {
+      employer.referralCode = employer.generateReferralCode();
+      await employer.save();
+    }
+
+    const referralLink = `${process.env.FRONTEND_URL || "https://jobsstorm.com"}/referral/${employer.referralCode}`;
+
+    res.json({
+      success: true,
+      referralCode: employer.referralCode,
+      referralLink,
+    });
+  } catch (error) {
+    console.error("Error getting referral link:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Get job and employer count
+const getJobAndEmployerCount = async (req, res) => {
+  try {
+    const jobCount = await Job.countDocuments();
+    const employerCount = await Employer.countDocuments();
+
+    res.json({
+      success: true,
+      data: {
+        jobCount,
+        employerCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error getting counts:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Employer signup
+const signUp = async (req, res) => {
+  try {
+    const {
+      contactPerson,
+      contactEmail,
+      mobileNumber,
+      password,
+      companyName,
+      website,
+      address,
+      city,
+      state,
+      pincode,
+      referralCode,
+    } = req.body;
+
+    // Check if employer already exists
+    const existEmployer = await Employer.findOne({
+      $or: [{ contactEmail }, { mobileNumber }],
+    });
+
+    if (existEmployer) {
+      return res.status(400).json({ message: "Employer already registered." });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newEmployer = new Employer({
+      uuid: uuidv4(),
+      contactPerson,
+      contactEmail,
+      mobileNumber,
+      password: hashedPassword,
+      companyName,
+      website,
+      address,
+      city,
+      state,
+      pincode,
+      verificationstatus: "pending",
+      blockstatus: "unblock",
+      emailverifedstatus: true,
+    });
+
+    // Generate referral code
+    newEmployer.referralCode = newEmployer.generateReferralCode();
+
+    // Handle referral
+    if (referralCode && referralCode.trim() !== "") {
+      const referrer = await Employer.findOne({
+        referralCode: referralCode.trim(),
+      });
+
+      if (referrer) {
+        newEmployer.referredBy = referrer._id;
+        await Employer.findByIdAndUpdate(referrer._id, {
+          $inc: { referralCount: 1, referralRewards: 100 },
+        });
+      }
+    }
+
+    await newEmployer.save();
+
+    const token = jwt.sign({ id: newEmployer._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    const { password: _, ...safeEmployer } = newEmployer._doc;
+
+    res.status(201).json({
+      message: "Employer registered successfully.",
+      user: safeEmployer,
+      token,
+    });
+  } catch (err) {
+    console.error("Error in registration:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Employer login
+const login = async (req, res) => {
+  try {
+    const { contactEmail, mobileNumber, password, fcmToken } = req.body;
+
+    if (!contactEmail && !mobileNumber) {
+      return res.status(400).json({ message: "Email or mobile is required." });
+    }
+
+    const employer = await Employer.findOne({
+      $or: [
+        ...(contactEmail ? [{ contactEmail }] : []),
+        ...(mobileNumber ? [{ mobileNumber }] : []),
+      ],
+    });
+
+    if (!employer) {
+      return res
+        .status(400)
+        .json({ message: "Please check your email and password." });
+    }
+
+    const match = await bcrypt.compare(password, employer.password);
+    if (!match) {
+      return res
+        .status(400)
+        .json({ message: "Please check your email and password." });
+    }
+
+    // Optional FCM token saving
+    if (
+      fcmToken &&
+      typeof fcmToken === "string" &&
+      !employer.employerfcmtoken.includes(fcmToken)
+    ) {
+      employer.employerfcmtoken.push(fcmToken);
+      await employer.save();
+    }
+
+    const token = jwt.sign({ id: employer._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    const { password: _, ...safeEmployer } = employer._doc;
+
+    res.json({
+      message: "Login successful",
+      user: safeEmployer,
+      token,
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// Google authentication
+const googleAuth = async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+
+    let employer = await Employer.findOne({ googleId: payload.sub });
+    if (!employer) {
+      employer = new Employer({
+        uuid: uuidv4(),
+        googleId: payload.sub,
+        contactEmail: payload.email,
+        contactPerson: payload.name,
+        userProfilePic: payload.picture,
+        isVerified: true,
+        emailverifedstatus: true,
+      });
+      employer.referralCode = employer.generateReferralCode();
+      await employer.save();
+    }
+
+    const token = jwt.sign({ id: employer._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    const { password: _, ...safeEmployer } = employer._doc;
+
+    res.json({
+      message: "Google login successful",
+      user: safeEmployer,
+      token,
+    });
+  } catch (err) {
+    console.error("Google auth error:", err);
+    res
+      .status(401)
+      .json({ message: "Invalid Google token", error: err.message });
+  }
+};
+
+// Apple authentication
+const appleAuth = async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const decoded = jwtDecode(idToken);
+    let employer = await Employer.findOne({ appleId: decoded.sub });
+
+    if (!employer) {
+      employer = new Employer({
+        uuid: uuidv4(),
+        appleId: decoded.sub,
+        contactEmail: decoded.email,
+        contactPerson: "Apple User",
+        isVerified: true,
+        emailverifedstatus: true,
+      });
+      employer.referralCode = employer.generateReferralCode();
+      await employer.save();
+    }
+
+    const token = jwt.sign({ id: employer._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    const { password: _, ...safeEmployer } = employer._doc;
+
+    res.json({
+      message: "Apple login successful",
+      user: safeEmployer,
+      token,
+    });
+  } catch (err) {
+    console.error("Apple auth error:", err);
+    res.status(401).json({ message: "Invalid Apple token" });
+  }
+};
+
+// Employer forgot password
+const employerForgotPassword = async (req, res) => {
+  try {
+    const { contactEmail, mobileNumber } = req.body;
+
+    if (!contactEmail && !mobileNumber) {
+      return res.status(400).json({ message: "Email or mobile is required" });
+    }
+
+    const employer = await Employer.findOne({
+      $or: [
+        ...(contactEmail ? [{ contactEmail }] : []),
+        ...(mobileNumber ? [{ mobileNumber }] : []),
+      ],
+    });
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store OTP in memory
+    if (!req.app.locals.otps) req.app.locals.otps = {};
+    req.app.locals.otps[contactEmail || mobileNumber] = {
+      otp: hashedOtp,
+      otpExpires,
+      createdAt: Date.now(),
+      type: "forgot_password",
+    };
+
+    // Send OTP via email if email exists
+    if (contactEmail) {
+      const emailTemplate = getOtpEmailTemplate(otp);
+      await sendEmail(contactEmail, "Password Reset OTP - JobsStorm", emailTemplate);
+    }
+
+    res.json({
+      message: "OTP sent successfully",
+      contactEmail: contactEmail || undefined,
+      mobileNumber: mobileNumber || undefined,
+    });
+  } catch (error) {
+    console.error("Error in forgot password:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Verify OTP for forgot password
+const employerverifyOTP = async (req, res) => {
+  try {
+    const { contactEmail, mobileNumber, otp } = req.body;
+
+    if ((!contactEmail && !mobileNumber) || !otp) {
+      return res.status(400).json({ message: "Email/mobile and OTP are required" });
+    }
+
+    const key = contactEmail || mobileNumber;
+    const storedOtpData = req.app.locals.otps?.[key];
+
+    if (!storedOtpData || storedOtpData.type !== "forgot_password") {
+      return res.status(404).json({ message: "No OTP found or expired" });
+    }
+
+    if (Date.now() > storedOtpData.otpExpires) {
+      delete req.app.locals.otps[key];
+      return res.status(400).json({ message: "OTP expired, please request a new one" });
+    }
+
+    const isValid = await bcrypt.compare(otp, storedOtpData.otp);
+    if (!isValid) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    // Mark OTP as verified
+    req.app.locals.otps[key].verified = true;
+
+    res.json({
+      message: "OTP verified successfully",
+      verified: true,
+    });
+  } catch (error) {
+    console.error("Error verifying OTP:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Change password after OTP verification
+const employerChangePassword = async (req, res) => {
+  try {
+    const { contactEmail, mobileNumber, newPassword } = req.body;
+
+    if ((!contactEmail && !mobileNumber) || !newPassword) {
+      return res.status(400).json({ message: "Email/mobile and new password are required" });
+    }
+
+    const key = contactEmail || mobileNumber;
+    const storedOtpData = req.app.locals.otps?.[key];
+
+    if (!storedOtpData || !storedOtpData.verified) {
+      return res.status(400).json({ message: "Please verify OTP first" });
+    }
+
+    const employer = await Employer.findOne({
+      $or: [
+        ...(contactEmail ? [{ contactEmail }] : []),
+        ...(mobileNumber ? [{ mobileNumber }] : []),
+      ],
+    });
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    employer.password = hashedPassword;
+    await employer.save();
+
+    // Remove OTP from memory
+    delete req.app.locals.otps[key];
+
+    res.json({
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Update employer details
+const updateEmployerDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Remove password from update data if present
+    delete updateData.password;
+
+    const employer = await Employer.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    res.json({
+      message: "Employer details updated successfully",
+      user: employer,
+    });
+  } catch (error) {
+    console.error("Error updating employer details:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Update profile picture
+const updateProfilePicture = async (req, res) => {
+  try {
+    const { employid } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const employer = await Employer.findById(employid);
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // Delete old profile picture from cloudinary if exists
+    if (employer.userProfilePic) {
+      const publicId = employer.userProfilePic.split("/").pop().split(".")[0];
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.error("Error deleting old profile picture:", err);
+      }
+    }
+
+    employer.userProfilePic = req.file.path;
+    await employer.save();
+
+    const { password: _, ...safeEmployer } = employer._doc;
+
+    res.json({
+      message: "Profile picture updated successfully",
+      user: safeEmployer,
+    });
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Decrease profile view
+const decreaseProfileView = async (req, res) => {
+  try {
+    const { employerId, employeeId } = req.params;
+
+    const employer = await Employer.findById(employerId);
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // Remove from viewedEmployees if exists
+    employer.viewedEmployees = employer.viewedEmployees.filter(
+      (view) => view.employeeId.toString() !== employeeId
+    );
+
+    // Decrease total count
+    if (employer.totalprofileviews > 0) {
+      employer.totalprofileviews -= 1;
+    }
+
+    await employer.save();
+
+    res.json({
+      message: "Profile view decreased successfully",
+      totalprofileviews: employer.totalprofileviews,
+    });
+  } catch (error) {
+    console.error("Error decreasing profile view:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Decrease resume download
+const decreaseResumeDownload = async (req, res) => {
+  try {
+    const { employerId, employeeId } = req.params;
+
+    const employer = await Employer.findById(employerId);
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // Remove from resumedownload if exists
+    employer.resumedownload = employer.resumedownload.filter(
+      (download) => download.employeeId.toString() !== employeeId
+    );
+
+    // Decrease total count
+    if (employer.totaldownloadresume > 0) {
+      employer.totaldownloadresume -= 1;
+    }
+
+    await employer.save();
+
+    res.json({
+      message: "Resume download decreased successfully",
+      totaldownloadresume: employer.totaldownloadresume,
+    });
+  } catch (error) {
+    console.error("Error decreasing resume download:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Change my password (authenticated user)
+const employerChangeMyPassword = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current and new password are required" });
+    }
+
+    const employer = await Employer.findById(employerId);
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    // Verify current password
+    const match = await bcrypt.compare(currentPassword, employer.password);
+    if (!match) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Update password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    employer.password = hashedPassword;
+    await employer.save();
+
+    res.json({
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   sendOtpToEmail,
   verifyEmailOtp,
   sendVerificationEmail,
   verifyCompanySignupOtp,
+  getEmployerDetails,
+  listAllEmployees,
+  getReferralLink,
+  getJobAndEmployerCount,
+  signUp,
+  login,
+  googleAuth,
+  appleAuth,
+  employerForgotPassword,
+  employerverifyOTP,
+  employerChangePassword,
+  updateEmployerDetails,
+  updateProfilePicture,
+  decreaseProfileView,
+  decreaseResumeDownload,
+  employerChangeMyPassword,
 };
