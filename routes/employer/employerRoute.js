@@ -266,6 +266,10 @@ employerRoute.get(
   "/events/:eventId/geteventspariticapant",
   eventsController.getEventRegistrations
 );
+employerRoute.post(
+  "/verify-company-signup-otp",
+  emailverifycontroller.verifyCompanySignupOtp
+);
 employerRoute.get(
   "/events/:eventId/registration-status/:participantId",
   eventsController.checkRegistrationStatus
