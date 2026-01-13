@@ -8,6 +8,7 @@ const adminPlanController = require("../../controller//employeeController/pricin
 
 
 const planController = require("../../controller/employerController/employerplanController");
+const adminPlanController = require("../../controller/employeeController/pricingPlanController");
 const adminfunction = require("../../controller/adminController/adminfunction");
 const bannerController = require("../../controller/adminController/eventbannerController");
 const employeeBannerController = require("../../controller/adminController/employeebanner");
@@ -64,6 +65,13 @@ mainadminRoute.delete("/deleteplan/:id", planController.deletePlan);
    💳 EMPLOYEE PLAN ACTIVATION (ADMIN)
 ──────────────────────────────────────────────── */
 mainadminRoute.post("/activate-employee-plan", adminfunction.activateEmployeePlan);
+
+/* ────────────────────────────────────────────────
+   📋 EMPLOYEE PLAN MANAGEMENT (ADMIN)
+──────────────────────────────────────────────── */
+mainadminRoute.get("/get-all-plans", adminPlanController.getPricingPlans);
+mainadminRoute.put("/update-plan/:id", adminPlanController.updatePlan);
+mainadminRoute.delete("/delete-plan/:id", adminPlanController.deletePlan);
 
 /* ────────────────────────────────────────────────
    🧾 EMPLOYER & EMPLOYEE APPROVALS

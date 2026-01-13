@@ -284,7 +284,8 @@ employerRoute.post(
   memoryUpload,
   chatController.sendMessage
 );
-
+employerRoute.post("/company-signup/send-otp", emailverifycontroller.sendCompanySignupOtp);
+employerRoute.post("/company-signup/verify-otp", emailverifycontroller.verifyCompanySignupOtp);
 // Get chat messages by employeeId, employerId, and jobId
 employerRoute.get("/chat/messages", chatController.getChatMessages);
 
