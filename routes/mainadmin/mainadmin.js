@@ -2,7 +2,11 @@ const express = require("express");
 const multer = require("multer");
 const { bannerImageStorage } = require("../../config/cloudinary");
 
+
 // Controllers
+const adminPlanController = require("../../controller//employeeController/pricingPlanController");
+
+
 const planController = require("../../controller/employerController/employerplanController");
 const adminfunction = require("../../controller/adminController/adminfunction");
 const bannerController = require("../../controller/adminController/eventbannerController");
@@ -18,6 +22,19 @@ const upload = multer({ storage: bannerImageStorage });
 /* ────────────────────────────────────────────────
    📦 PLAN MANAGEMENT
 ──────────────────────────────────────────────── */
+
+
+mainadminRoute.get("/get-all-plans", adminPlanController.getPricingPlans);
+mainadminRoute.put('/update-plan/:id', adminPlanController.updatePlan);
+mainadminRoute.delete('/delete-plan/:id', adminPlanController.deletePlan);
+
+
+
+
+
+
+
+
 mainadminRoute.get(
   "/fetchplanbyemp/:employerId",
   planController.getPlansByEmployer
@@ -28,6 +45,20 @@ mainadminRoute.get("/getplan/:id", planController.getPlanById);
 mainadminRoute.post("/createplan", planController.createPlan);
 mainadminRoute.put("/updateplan/:id", planController.updatePlan);
 mainadminRoute.delete("/deleteplan/:id", planController.deletePlan);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* ────────────────────────────────────────────────
    💳 EMPLOYEE PLAN ACTIVATION (ADMIN)

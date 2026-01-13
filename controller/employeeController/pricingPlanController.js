@@ -1,9 +1,6 @@
 const EmployeePlan = require("../../models/employeePlansSchema");
 
-/**
- * Get pricing plans from database
- * GET /employee/pricing-plans
- */
+
 exports.getPricingPlans = async (req, res) => {
   try {
     const plans = await EmployeePlan.find({ isActive: true }).sort({ price: 1 });
@@ -46,11 +43,6 @@ exports.getPricingPlans = async (req, res) => {
   }
 };
 
-/**
- * Get comparison table data from database
- * GET /employee/pricing-plans/comparison
- * Note: Comparison table is now optional since features are shown in plan cards
- */
 exports.getComparisonTable = async (req, res) => {
   try {
     const plans = await EmployeePlan.find({ isActive: true }).sort({ price: 1 });
@@ -139,5 +131,41 @@ exports.getComparisonTable = async (req, res) => {
     });
   }
 };
+
+exports.updatePlan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updateData = req.body.data;
+
+        const updatedPlan = await EmployeePlan.findByIdAndUpdate(id, updateData, { new: true });
+
+        if (!updatedPlan) {
+            return res.status(404).json({ success: false, message: "Plan not found" });
+        }
+
+        return res.status(200).json({ success: true, data: updatedPlan, message: "Plan updated successfully" });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.deletePlan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedPlan = await EmployeePlan.findByIdAndDelete(id);
+
+        if (!deletedPlan) {
+            return res.status(404).json({ success: false, message: "Plan not found" });
+        }
+
+        return res.status(200).json({ success: true, message: "Plan deleted successfully" });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
 
 
