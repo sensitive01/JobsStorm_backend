@@ -4,7 +4,7 @@ const { bannerImageStorage } = require("../../config/cloudinary");
 
 
 // Controllers
-const adminPlanController = require("../../controller//employeeController/pricingPlanController");
+// const adminPlanController = require("../../controller//employeeController/pricingPlanController");
 
 
 const planController = require("../../controller/employerController/employerplanController");
