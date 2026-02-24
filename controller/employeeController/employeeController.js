@@ -2306,16 +2306,16 @@ const getFeaturedJobs = async (req, res) => {
     let jobs;
 
     if (jobType === "recent") {
-      // Latest 4 jobs
-      jobs = await Job.find().sort({ createdAt: -1 }).limit(4);
+      // Pull enough jobs so frontend region filtering isn't starved.
+      jobs = await Job.find().sort({ createdAt: -1 }).limit(1000);
     }
     else if (jobType === "featured") {
-      // Random 4 jobs
-      jobs = await Job.aggregate([{ $sample: { size: 4 } }]);
+      // Random jobs
+      jobs = await Job.aggregate([{ $sample: { size: 1000 } }]);
     }
     else if (["freelancer", "part-time", "full-time"].includes(jobType.toLowerCase())) {
       // Job type filter
-      jobs = await Job.find({ jobType: { $regex: jobType, $options: "i" } });
+      jobs = await Job.find({ jobType: { $regex: jobType, $options: "i" } }).limit(1000);
     }
     else {
       return res.status(400).json({
