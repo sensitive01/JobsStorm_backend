@@ -1,15 +1,16 @@
 const { v2: cloudinary } = require('cloudinary');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multerStorageCloudinary = require('multer-storage-cloudinary');
+const CloudinaryStorage = multerStorageCloudinary.CloudinaryStorage || multerStorageCloudinary;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 cloudinary.config({
-   cloud_name: process.env.CLOUDINARY_NAME,
-   api_key: process.env.CLOUDINARY_API_KEY,
-   api_secret: process.env.CLOUDINARY_API_SECRET,
-   // Increase timeout for large file uploads
-   timeout: 300000, // 5 minutes (300 seconds) for large files
-   chunk_size: 20 * 1024 * 1024, // 20MB chunks for large files
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  // Increase timeout for large file uploads
+  timeout: 300000, // 5 minutes (300 seconds) for large files
+  chunk_size: 20 * 1024 * 1024, // 20MB chunks for large files
 });
 
 const generatePublicId = (req, file, prefix) => {
@@ -205,13 +206,13 @@ const audioStorage = new CloudinaryStorage({
 const uploadImage = async (imageBuffer, folder, options = {}) => {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
-      folder: folder, 
+      folder: folder,
       resource_type: "auto",
       timeout: 60000, // 60 seconds timeout
       chunk_size: 20 * 1024 * 1024, // 20MB chunks
       ...options
     };
-    
+
     cloudinary.uploader.upload_stream(
       uploadOptions,
       (error, result) => {
@@ -220,7 +221,7 @@ const uploadImage = async (imageBuffer, folder, options = {}) => {
         }
         resolve(result.secure_url);
       }
-    ).end(imageBuffer); 
+    ).end(imageBuffer);
   });
 };
 module.exports = {
