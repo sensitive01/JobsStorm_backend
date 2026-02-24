@@ -223,8 +223,12 @@ employerRoute.get("/get-job-post-count-exceeded-or-not/:employerId", jobControll
 employerRoute.get("/get-candidate-database-data", jobController.getCandidateDataBaseData);
 employerRoute.get("/get-candidate-details/:candidateId", jobController.getCandidateData);
 employerRoute.get("/get-shortlisted-candidate-data/:employerId", jobController.getShortListedCandidateData);
+employerRoute.get("/get-employer-topbar-data/:employerId", employerController.getEmployerDetailsTopBar);
 
+employerRoute.get("/get-dashboard-data/:employerId", employerController.getDashboardData);
+employerRoute.get("/get-interview-details/:employerId", employerController.getInterviewDetails);
 
+employerRoute.get("/get-suggested-candidates/:employerId", employerController.getSuggestedCandidates);
 
 
 employerRoute.get("/fetchemployer/:id", employerController.getEmployerDetails);

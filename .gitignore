@@ -1,3 +1,6 @@
 node_modules/
 .env
 temp_env_new.txt
+newUpload.js/
+runCode.js
+uploadJob.js

@@ -655,6 +655,7 @@ employeeRoute.get("/get-candidate-transaction-history/:employeeId", orderControl
 employeeRoute.get("/get-job-storm-card-data/:employeeId", employeeController.getJobStormCardData);
 employeeRoute.get("/is-candidate-subscribed/:employeeId", employeeController.isCandidateSubscribed);
 employeeRoute.get("/get-candidate-dashboard-data/:candidateId", employeeController.geCandidateDashboardData);
+employeeRoute.get("/get-all-categories", employeeController.getAllCategories);
 
 employeeRoute.get("/fetchallemployee", employeeController.getAllEmployees);
 employeeRoute.get("/fetchemployee/:id", employeeController.getEmployeeDetails);

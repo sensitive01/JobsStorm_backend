@@ -1231,15 +1231,8 @@ const updateCandidateJobApplicationStatus = async (req, res) => {
     const { jobId } = req.params;
     const { applicationId, newStatus, additionalData = {} } = req.body;
 
-    console.log("jobId:", jobId);
-    console.log(
-      "applicationId, newStatus, additionalData:",
-      applicationId,
-      newStatus,
-      additionalData
-    );
+    console.log("req.body", req.body)
 
-    // Find job that contains this application
     const job = await Job.findOne({
       _id: jobId,
       "applications._id": applicationId,
@@ -1374,7 +1367,7 @@ const getCandidateDataBaseData = async (req, res) => {
   try {
     const candidateDatabase = await Employee.find(
       {},
-      { userName: 1, userEmail: 1, userMobile: 1, currentrole: 1 }
+      { userName: 1, userEmail: 1, userMobile: 1, currentrole: 1,skills:1,totalExperience:1,city:1 }
     );
 
     if (!candidateDatabase || candidateDatabase.length === 0) {

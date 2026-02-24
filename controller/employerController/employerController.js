@@ -14,6 +14,8 @@ const appleKeysClient = jwksClient({
   jwksUri: "https://appleid.apple.com/auth/keys",
 });
 const jobModel = require("../../models/jobSchema");
+const employeeModel = require("../../models/employeeschema")
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const generateUserUUID = () => uuidv4(); // Define the function
 
@@ -306,12 +308,12 @@ const login = async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
-    const role = user?.role||"employer"
+    const role = user?.role || "employer"
     res.json({
       message: "Login successful",
       user,
       token,
-      
+
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -389,15 +391,13 @@ const appleAuth = async (req, res) => {
 };
 const getEmployerDetails = async (req, res) => {
   try {
-    // Get the employee ID from the authenticated user (from JWT)
-    // OR from request params if you want to allow fetching by ID
+
     const employeeId = req.userId || req.params.id;
 
     if (!employeeId) {
       return res.status(400).json({ message: "Employer ID is required" });
     }
 
-    // Find the employee and exclude the password
     const employee = await userModel
       .findById(employeeId)
       .select("-userPassword");
@@ -407,6 +407,36 @@ const getEmployerDetails = async (req, res) => {
     }
 
     res.json(employee);
+  } catch (err) {
+    console.error("Error fetching employer details:", err);
+
+    if (err.kind === "ObjectId") {
+      return res.status(400).json({ message: "Invalid employer ID format" });
+    }
+
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+const getEmployerDetailsTopBar = async (req, res) => {
+  try {
+
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res.status(400).json({ message: "Employer ID is required" });
+    }
+
+    const employer = await userModel
+      .findById(employerId, { contactPerson: 1, companyName: 1 })
+
+
+    if (!employer) {
+      return res.status(404).json({ message: "Employer not found" });
+    }
+
+    res.json(employer);
   } catch (err) {
     console.error("Error fetching employer details:", err);
 
@@ -1003,7 +1033,369 @@ const getJobAndEmployerCount = async (req, res) => {
   }
 };
 
+
+const getDashboardData = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res.status(400).json({ message: "Employer ID is required" });
+    }
+
+    // Active Jobs Count
+    const activeJobCount = await jobModel.countDocuments({
+      employId: employerId,
+      isActive: true,
+    });
+
+    // Applications + Hired Count
+    const applicationStats = await jobModel.aggregate([
+      { $match: { employId: employerId } },
+      { $unwind: "$applications" },
+      {
+        $group: {
+          _id: null,
+          totalApplications: { $sum: 1 },
+          hiredCount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$applications.employApplicantStatus", "Selected"] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const totalApplicationCount =
+      applicationStats.length > 0 ? applicationStats[0].totalApplications : 0;
+
+    const hiredCount =
+      applicationStats.length > 0 ? applicationStats[0].hiredCount : 0;
+
+    // Most Recent Application
+    const recentApplication = await jobModel.aggregate([
+      { $match: { employId: employerId } },
+      { $unwind: "$applications" },
+      { $sort: { "applications.appliedDate": -1 } },
+      { $limit: 1 },
+      {
+        $project: {
+          _id: 1,
+          jobId: 1,
+          jobTitle: 1,
+          appliedDate: "$applications.appliedDate",
+          candidate: {
+            applicantId: "$applications.applicantId",
+            firstName: "$applications.firstName",
+            email: "$applications.email",
+            phone: "$applications.phone",
+            status: "$applications.status",
+            employApplicantStatus:
+              "$applications.employApplicantStatus",
+            resume: "$applications.resume",
+            coverLetter: "$applications.coverLetter",
+          },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        activeJobCount,
+        totalApplicationCount,
+        hiredCount,
+        recentApplication: recentApplication[0] || null,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching dashboard data:", err);
+
+    return res.status(500).json({
+      message: "Error fetching dashboard data",
+      error: err.message,
+    });
+  }
+};
+
+
+const getInterviewDetails = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+    if (!employerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employer ID is required",
+      });
+    }
+
+    const interviews = await jobModel.aggregate([
+      // 1️⃣ Match employer jobs
+      {
+        $match: {
+          employId: employerId,
+        },
+      },
+
+      // 2️⃣ Break applications array
+      {
+        $unwind: "$applications",
+      },
+
+      // 3️⃣ Filter only scheduled interviews
+      {
+        $match: {
+          "applications.interviewDate": { $ne: null },
+        },
+      },
+
+      // 4️⃣ Convert applicantId string → ObjectId
+      {
+        $addFields: {
+          applicantObjectId: {
+            $toObjectId: "$applications.applicantId",
+          },
+        },
+      },
+
+      // 5️⃣ Lookup employee details
+      {
+        $lookup: {
+          from: "employees", // collection name
+          localField: "applicantObjectId",
+          foreignField: "_id",
+          as: "employeeDetails",
+        },
+      },
+
+      // 6️⃣ Flatten employee array
+      {
+        $unwind: {
+          path: "$employeeDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // 7️⃣ Shape final output
+      {
+        $project: {
+          _id: 0,
+
+          // Job Details
+          jobId: "$_id",
+          jobTitle: 1,
+          companyName: 1,
+          location: 1,
+
+          // Interview Details
+          interviewType: "$applications.interviewType",
+          interviewDate: "$applications.interviewDate",
+          interviewTime: "$applications.interviewTime",
+          interviewLink: "$applications.interviewLink",
+          interviewVenue: "$applications.interviewVenue",
+          applicationStatus: "$applications.status",
+          employApplicantStatus:
+            "$applications.employApplicantStatus",
+
+          // Employee Details
+          employee: {
+            id: "$employeeDetails._id",
+            userName: "$employeeDetails.userName",
+            userEmail: "$employeeDetails.userEmail",
+            userMobile: "$employeeDetails.userMobile",
+            currentrole: "$employeeDetails.currentrole",
+            totalExperience: "$employeeDetails.totalExperience",
+            skills: "$employeeDetails.skills",
+            city: "$employeeDetails.city",
+            resume: "$employeeDetails.resume",
+            profileImage: "$employeeDetails.profileImage",
+            profileVideo: "$employeeDetails.profileVideo",
+          },
+        },
+      },
+
+      // 8️⃣ Sort upcoming interviews first
+      {
+        $sort: { interviewDate: 1 },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      totalInterviews: interviews.length,
+      data: interviews,
+    });
+  } catch (err) {
+    console.error("Error fetching interview details:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching interview details",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+
+const getSuggestedCandidates = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+
+
+
+    const jobData = await jobModel.findOne({ employId: employerId });
+    if (!jobData) {
+      return res.status(404).json({
+        success: false,
+        message: "Job not found or does not belong to this employer",
+      });
+    }
+
+    const candidateData = await employeeModel.find(
+      {},
+      {
+        userPassword: 0,
+        otp: 0,
+        otpExpires: 0,
+        employeefcmtoken: 0,
+        googleId: 0,
+        appleId: 0,
+        audioFiles: 0,
+        videoFiles: 0,
+      }
+    ).lean();
+    console.log("candidate", candidateData)
+
+    const AI_LIMIT = 15;
+    const reducedCandidates = candidateData.slice(0, AI_LIMIT).map((c) => ({
+      _id: c._id,
+      name: c.userName,
+      skills: c.skills,
+      experience: c.totalExperience,
+      currentrole: c.currentrole,
+      specialization: c.specialization,
+      city: c.city,
+      expectedSalary: c.expectedSalary,
+      education: c.education ? c.education.map(e => `${e.degree} from ${e.institution}`) : [],
+    }));
+
+    if (reducedCandidates.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const jobDetailsForAI = {
+      jobTitle: jobData.jobTitle,
+      description: jobData.jobDescription || jobData.description,
+      requiredSkills: jobData.skills,
+      experienceLevel: jobData.experienceLevel,
+      location: jobData.location,
+      isRemote: jobData.isRemote,
+    };
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: "GEMINI_API_KEY is not defined in the server environment.",
+      });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0,
+      },
+    });
+
+    const prompt = `
+      You are an expert HR recruitment AI.
+      I will provide a 'JobDescription' and a list of 'Candidates'.
+      Your task is to analyze each candidate and calculate a match score (0 to 100) based on how well their skills, experience, and details align with the JobDescription.
+      
+      JobDescription:
+      ${JSON.stringify(jobDetailsForAI, null, 2)}
+
+      Candidates:
+      ${JSON.stringify(reducedCandidates, null, 2)}
+
+      Output exactly a JSON array of objects without any markdown wrappers. Each object must have these properties:
+      - "candidateId" (must match the _id of the candidate exactly)
+      - "score" (a number between 0 and 100)
+      - "matchReason" (Max 1 short sentence explanation of the match)
+      Ensure the output array is sorted in descending order by score.
+    `;
+
+    const result = await model.generateContent(prompt);
+    let aiResponseText = result.response.text();
+
+    let scoresMap;
+    try {
+      scoresMap = JSON.parse(aiResponseText);
+    } catch (parseError) {
+      console.error("Failed to parse AI response:", aiResponseText);
+      return res.status(500).json({
+        success: false,
+        message: "AI response format was invalid",
+        error: parseError.message
+      });
+    }
+
+    const finalSuggested = [];
+    scoresMap.forEach((aiScore) => {
+      // Only include candidates with a score of 40 or above
+      if (aiScore.score >= 40) {
+        const dbCandidate = candidateData.find(
+          (c) => c._id.toString() === aiScore.candidateId
+        );
+        if (dbCandidate) {
+          finalSuggested.push({
+            ...dbCandidate,
+            aiScore: aiScore.score,
+            aiMatchReason: aiScore.matchReason,
+          });
+        }
+      }
+    });
+
+    // Explicitly sort it here too, just to be sure
+    finalSuggested.sort((a, b) => b.aiScore - a.aiScore);
+
+    return res.status(200).json({
+      success: true,
+      data: finalSuggested,
+    });
+  } catch (err) {
+    console.log("Error in getting the suggested candidates", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
 module.exports = {
+  getSuggestedCandidates,
+  getInterviewDetails,
+  getDashboardData,
+  getEmployerDetailsTopBar,
   getJobAndEmployerCount,
   signUp,
   decreaseProfileView,

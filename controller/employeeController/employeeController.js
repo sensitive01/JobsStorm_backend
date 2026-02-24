@@ -414,16 +414,16 @@ const getApplicationStatus = async (req, res) => {
 // Helper: Normalize fileType
 const normalizeFileType = (fileType) => {
   if (!fileType) return null;
-  
+
   // Convert to lowercase and trim
   let normalized = String(fileType).toLowerCase().trim();
-  
+
   // Remove common file extensions and extra words (more aggressive)
   normalized = normalized
     .replace(/\s*(pdf|jpg|jpeg|png|doc|docx|image|file|document)\s*/gi, '')
     .replace(/\s+/g, '') // Remove all spaces
     .trim();
-  
+
   // Map common variations to standard types (expanded list)
   const typeMap = {
     'passport': 'passport',
@@ -457,19 +457,19 @@ const normalizeFileType = (fileType) => {
     'coverletterpdf': 'coverLetter',
     'cover': 'coverLetter',
   };
-  
+
   // Try exact match first
   if (typeMap[normalized]) {
     return typeMap[normalized];
   }
-  
+
   // Try partial match (contains) - check if normalized contains any key
   for (const [key, value] of Object.entries(typeMap)) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return value;
     }
   }
-  
+
   // If still not found, try to extract the main word
   const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover', 'certificate', 'cert'];
   for (const word of mainWords) {
@@ -488,7 +488,7 @@ const normalizeFileType = (fileType) => {
       return word;
     }
   }
-  
+
   // Return as-is if nothing matches (might be a valid type)
   return normalized;
 };
@@ -498,15 +498,15 @@ const uploadFile = async (req, res) => {
   console.log('🚀 UPLOAD FILE CONTROLLER - START');
   console.log('='.repeat(80));
   console.log('Timestamp:', new Date().toISOString());
-  
+
   try {
     const { employid } = req.params;
     let fileType = req.query.fileType || req.body.fileType;
-    
+
     console.log('📋 Request details:');
     console.log('  - Employee ID:', employid);
     console.log('  - File Type (raw):', fileType);
-    
+
     // Normalize the fileType
     fileType = normalizeFileType(fileType);
 
@@ -518,7 +518,7 @@ const uploadFile = async (req, res) => {
       hasBuffer: !!req.file.buffer,
       hasUrl: !!(req.file.secure_url || req.file.url)
     } : 'No file found');
-    
+
     if (req.body && Object.keys(req.body).length > 0) {
       console.log('📦 Request body keys:', Object.keys(req.body));
     }
@@ -526,7 +526,7 @@ const uploadFile = async (req, res) => {
     // Validate inputs
     if (!employid || !mongoose.isValidObjectId(employid)) {
       console.error('Invalid employee ID provided:', employid);
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
         message: "Valid employee ID is required",
         error: "INVALID_EMPLOYEE_ID"
@@ -535,7 +535,7 @@ const uploadFile = async (req, res) => {
 
     if (!fileType) {
       console.error('No fileType provided in request');
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
         message: "File type (fileType) is required",
         error: "MISSING_FILE_TYPE"
@@ -544,7 +544,7 @@ const uploadFile = async (req, res) => {
 
     if (!req.file) {
       console.error('No file was uploaded in the request');
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
         message: "No file uploaded. Please select a file to upload.",
         error: "NO_FILE_UPLOADED"
@@ -645,7 +645,7 @@ const uploadFile = async (req, res) => {
             } else if (url.includes('/video/') || url.match(/\.(mp4|mov|avi)$/i)) {
               resourceType = 'video';
             }
-            
+
             try {
               const deleteResult = await cloudinary.uploader.destroy(publicId, {
                 resource_type: resourceType,
@@ -677,7 +677,7 @@ const uploadFile = async (req, res) => {
             if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
               resourceType = 'image';
             }
-            
+
             try {
               const deleteResult = await cloudinary.uploader.destroy(publicId, {
                 resource_type: resourceType,
@@ -709,7 +709,7 @@ const uploadFile = async (req, res) => {
             if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
               resourceType = 'image';
             }
-            
+
             try {
               const deleteResult = await cloudinary.uploader.destroy(publicId, {
                 resource_type: resourceType,
@@ -741,7 +741,7 @@ const uploadFile = async (req, res) => {
             if (url.includes('/image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
               resourceType = 'image';
             }
-            
+
             try {
               const deleteResult = await cloudinary.uploader.destroy(publicId, {
                 resource_type: resourceType,
@@ -773,7 +773,7 @@ const uploadFile = async (req, res) => {
 
     // Prepare field update
     let updateField;
-    
+
     // Ensure fileType is normalized (trim and handle case)
     fileType = String(fileType).trim();
     console.log(`[${fileType}] Preparing to update field for file type:`, fileType, '(type:', typeof fileType, ')');
@@ -783,14 +783,14 @@ const uploadFile = async (req, res) => {
       size: result.size,
       hasUrl: !!(result.secure_url || result.url)
     });
-    
+
     try {
       switch (fileType) {
         case "profileImage":
           updateField = { userProfilePic: fileUrl };
           console.log('Setting profile image URL:', fileUrl);
           break;
-          
+
         case "resume":
           const resumeData = {
             name: result.originalname || result.filename || "Unnamed",
@@ -802,7 +802,7 @@ const uploadFile = async (req, res) => {
           updateField = { resume: resumeData };
           console.log('Setting resume data:', JSON.stringify(resumeData, null, 2));
           break;
-          
+
         case "coverLetter":
           updateField = {
             coverLetterFile: {
@@ -813,7 +813,7 @@ const uploadFile = async (req, res) => {
           };
           console.log('Setting cover letter URL:', fileUrl);
           break;
-          
+
         case "passport":
           updateField = {
             passport: {
@@ -824,7 +824,7 @@ const uploadFile = async (req, res) => {
           };
           console.log('Setting passport URL:', fileUrl);
           break;
-          
+
         case "educationCertificate":
           updateField = {
             educationCertificate: {
@@ -836,7 +836,7 @@ const uploadFile = async (req, res) => {
           console.log(`[educationCertificate] Setting education certificate URL:`, fileUrl);
           console.log(`[educationCertificate] Update field:`, JSON.stringify(updateField, null, 2));
           break;
-          
+
         case "policeClearance":
           updateField = {
             policeClearance: {
@@ -847,7 +847,7 @@ const uploadFile = async (req, res) => {
           };
           console.log('Setting police clearance URL:', fileUrl);
           break;
-          
+
         case "mofaAttestation":
           updateField = {
             mofaAttestation: {
@@ -858,10 +858,10 @@ const uploadFile = async (req, res) => {
           };
           console.log('Setting MOFA attestation URL:', fileUrl);
           break;
-          
+
         default:
           console.error('Invalid file type provided:', fileType);
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
             message: "Invalid file type provided",
             error: "INVALID_FILE_TYPE",
@@ -883,13 +883,13 @@ const uploadFile = async (req, res) => {
     }
 
     console.log('Updating employee document with new file reference...');
-    
+
     try {
       const updatedEmployee = await userModel.findByIdAndUpdate(
         employid,
         { $set: updateField },
-        { 
-          new: true, 
+        {
+          new: true,
           runValidators: true,
           context: 'query' // Ensures validators run with the correct context
         }
@@ -905,7 +905,7 @@ const uploadFile = async (req, res) => {
       }
 
       console.log('Employee document updated successfully');
-      
+
       const response = {
         success: true,
         fileType,
@@ -918,15 +918,15 @@ const uploadFile = async (req, res) => {
         },
         message: "File uploaded and saved successfully"
       };
-      
+
       console.log('='.repeat(80));
       console.log('✅ UPLOAD COMPLETED SUCCESSFULLY');
       console.log('='.repeat(80));
       console.log('Response:', JSON.stringify(response, null, 2));
       console.log('='.repeat(80));
-      
+
       res.status(200).json(response);
-      
+
     } catch (updateError) {
       console.log('='.repeat(80));
       console.log('❌ ERROR IN UPLOAD FILE CONTROLLER');
@@ -940,12 +940,12 @@ const uploadFile = async (req, res) => {
         updateField: JSON.stringify(updateField, null, 2),
         timestamp: new Date().toISOString()
       });
-      
+
       // Try to provide more specific error messages based on error type
       let errorMessage = "Failed to update employee record";
       let statusCode = 500;
       let errorDetails = {};
-      
+
       if (updateError.name === 'ValidationError') {
         errorMessage = "Validation failed: " + updateError.message;
         statusCode = 400;
@@ -962,7 +962,7 @@ const uploadFile = async (req, res) => {
       } else if (updateError.message) {
         errorMessage = updateError.message;
       }
-      
+
       // Ensure we always send JSON response
       if (!res.headersSent) {
         res.status(statusCode).json({
@@ -971,9 +971,9 @@ const uploadFile = async (req, res) => {
           error: updateError.name || "UPDATE_FAILED",
           fileType: fileType,
           ...errorDetails,
-          ...(process.env.NODE_ENV === 'development' && { 
+          ...(process.env.NODE_ENV === 'development' && {
             details: updateError.message,
-            stack: updateError.stack 
+            stack: updateError.stack
           })
         });
       } else {
@@ -1004,7 +1004,7 @@ const uploadFile = async (req, res) => {
       } : 'No file data'
     });
     console.log('='.repeat(80));
-    
+
     // Ensure we always send JSON response, never HTML
     if (!res.headersSent) {
       console.log('📤 Sending error response to client');
@@ -1012,9 +1012,9 @@ const uploadFile = async (req, res) => {
         success: false,
         message: "An unexpected error occurred during file upload",
         error: error.name || "UPLOAD_ERROR",
-        ...(process.env.NODE_ENV === 'development' && { 
+        ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
-          stack: error.stack 
+          stack: error.stack
         })
       });
     } else {
@@ -2018,11 +2018,11 @@ const editUserData = async (req, res) => {
       userId: req.params.userId,
       files: req.files ? Object.keys(req.files) : 'No files'
     });
-    
+
     // Handle specific error types
     let statusCode = 500;
     let errorMessage = "Server error";
-    
+
     if (err.code === 'LIMIT_FILE_SIZE') {
       statusCode = 400;
       errorMessage = "File size exceeds the 50MB limit. Please compress your file and try again.";
@@ -2032,16 +2032,16 @@ const editUserData = async (req, res) => {
     } else if (err.message) {
       errorMessage = err.message;
     }
-    
+
     // Ensure we always send JSON response
     if (!res.headersSent) {
-      res.status(statusCode).json({ 
-        success: false, 
-        message: errorMessage, 
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
         error: err.code || err.name || "UPDATE_ERROR",
-        ...(process.env.NODE_ENV === 'development' && { 
+        ...(process.env.NODE_ENV === 'development' && {
           details: err.message,
-          stack: err.stack 
+          stack: err.stack
         })
       });
     }
@@ -2584,8 +2584,44 @@ const geCandidateDashboardData = async (req, res) => {
 };
 
 
+const getAllCategories = async (req, res) => {
+  try {
+    const categories = await Job.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          count: 1,
+        },
+      },
+      {
+        $sort: { category: 1 },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: categories,
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
 //hbh
 module.exports = {
+  getAllCategories,
   geCandidateDashboardData,
   isCandidateSubscribed,
   getJobStormCardData,
