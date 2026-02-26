@@ -294,6 +294,7 @@ exports.getChatsByEmployerId = async (req, res) => {
       updatedAt: chat.updatedAt,
       unreadCountEmployer: chat.unreadCountEmployer,
       unreadCountEmployee: chat.unreadCountEmployee,
+      messages: chat.messages || [],
       latestMessage: chat.messages && chat.messages.length > 0
         ? chat.messages[chat.messages.length - 1]
         : null,
