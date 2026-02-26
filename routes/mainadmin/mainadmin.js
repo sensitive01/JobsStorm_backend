@@ -169,6 +169,17 @@ mainadminRoute.get(
 );
 
 /* ────────────────────────────────────────────────
+   📚 RESOURCES MANAGEMENT
+──────────────────────────────────────────────── */
+const resourceController = require("../../controller/resourceController");
+
+mainadminRoute.post("/post-resources", resourceController.postResource);
+mainadminRoute.get("/get-all-resources", resourceController.getAllResources);
+mainadminRoute.get("/get-resources/:id", resourceController.getResourceById);
+mainadminRoute.put("/update-resource-data/:id", resourceController.updateResource);
+mainadminRoute.delete("/delete-resource-data/:id", resourceController.deleteResource);
+
+/* ────────────────────────────────────────────────
    ✅ EXPORT ROUTER
 ──────────────────────────────────────────────── */
 module.exports = mainadminRoute;

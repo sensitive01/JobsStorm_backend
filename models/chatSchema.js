@@ -39,7 +39,7 @@ const chatSchema = new mongoose.Schema(
     jobId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Job",
-      required: true,
+      // required: true,
     },
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -13,6 +13,7 @@ const employerSchema = new mongoose.Schema({
   mobileNumber: String,
   password: String,
   userProfilePic: String,
+  userCoverPic: String,
 
   // 🔹 Organization / Institution Details
   companyName: String,
@@ -22,6 +23,9 @@ const employerSchema = new mongoose.Schema({
   city: String,
   state: String,
   pincode: String,
+  linkedin: String,
+  twitter: String,
+  facebook: String,
 
   // 🔹 Authentication & Verification
   otp: String,

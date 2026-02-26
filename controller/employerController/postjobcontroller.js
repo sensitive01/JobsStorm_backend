@@ -3,6 +3,7 @@ const Job = require("../../models/jobSchema");
 const Employer = require("../../models/employerSchema");
 const Employee = require("../../models/employeeschema");
 const SavedCandidate = require("../../models/savedcandiSchema");
+const NotificationController = require("../notificationController");
 const getJobTitleByJobId = async (req, res) => {
   try {
     const jobId = req.params.jobId;
@@ -188,10 +189,11 @@ const getAllJobs = async (req, res) => {
 
     // --- LOCATION / REGION ---
     if (location) {
+      const flexibleLocation = location.replace(/[-\s]+/g, '[-\\s]+');
       filterConditions.$or = [
         ...(filterConditions.$or || []),
-        { location: { $regex: location, $options: "i" } },
-        { region: { $regex: location, $options: "i" } },
+        { location: { $regex: flexibleLocation, $options: "i" } },
+        { region: { $regex: flexibleLocation, $options: "i" } },
       ];
     }
 
@@ -701,6 +703,33 @@ const updateApplicantStatus = async (req, res) => {
         success: false,
         message: "Application not found or not updated",
       });
+    }
+
+    // ✅ Trigger Notification to Candidate
+    try {
+      const job = await Job.findOne({ "applications._id": applicationId });
+      if (job) {
+        const application = job.applications.find(app => String(app._id) === String(applicationId));
+        if (application) {
+          const isInterview = status === "Interview" || status === "Shortlisted" && (interviewdate || interviewtime);
+          const title = isInterview ? "Interview Scheduled" : "Application Status Updated";
+          const body = isInterview
+            ? `Your interview for ${job.jobTitle} is scheduled on ${interviewdate} at ${interviewtime}.`
+            : `Your application status for ${job.jobTitle} has been updated to ${status}.`;
+
+          await NotificationController.createNotification({
+            recipientId: applicantId,
+            recipientType: 'employee',
+            senderId: job.employId || job.employid,
+            senderType: 'employer',
+            title,
+            body,
+            data: { jobId: job._id, applicationId }
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to send notification:", notifErr);
     }
 
     return res.status(200).json({
@@ -1283,6 +1312,27 @@ const updateCandidateJobApplicationStatus = async (req, res) => {
     // ✅ Save the parent document
     await job.save();
 
+    // ✅ Trigger Notification to Candidate
+    try {
+      const isInterview = newStatus === "Interview" || newStatus === "Shortlisted" && (additionalData.interviewDate || additionalData.interviewTime);
+      const title = isInterview ? "Interview Scheduled" : "Application Status Updated";
+      const body = isInterview
+        ? `Your interview for ${job.jobTitle} is scheduled on ${additionalData.interviewDate} at ${additionalData.interviewTime}.`
+        : `Your application status for ${job.jobTitle} has been updated to ${newStatus}.`;
+
+      await NotificationController.createNotification({
+        recipientId: application.applicantId,
+        recipientType: 'employee',
+        senderId: job.employId || job.employid,
+        senderType: 'employer',
+        title,
+        body,
+        data: { jobId: job._id, applicationId }
+      });
+    } catch (notifErr) {
+      console.error("Failed to send notification:", notifErr);
+    }
+
     res.status(200).json({
       message: "Application status updated successfully",
       updatedApplication: application,
@@ -1367,7 +1417,7 @@ const getCandidateDataBaseData = async (req, res) => {
   try {
     const candidateDatabase = await Employee.find(
       {},
-      { userName: 1, userEmail: 1, userMobile: 1, currentrole: 1,skills:1,totalExperience:1,city:1 }
+      { userName: 1, userEmail: 1, userMobile: 1, currentrole: 1, skills: 1, totalExperience: 1, city: 1 }
     );
 
     if (!candidateDatabase || candidateDatabase.length === 0) {

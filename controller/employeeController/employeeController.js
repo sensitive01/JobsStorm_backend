@@ -24,6 +24,7 @@ const appleKeysClient = jwksClient({
   jwksUri: "https://appleid.apple.com/auth/keys",
 });
 const mongoose = require("mongoose");
+const fs = require("fs");
 const JobFilter = require("../../models/jobAlertModal");
 const blogSchema = require("../../models/blogSchema");
 
@@ -1942,32 +1943,63 @@ const editUserData = async (req, res) => {
       portfolio: body.portfolio,
     };
 
+    // Helper to upload to Cloudinary
+    const uploadToCloudinary = async (file, folderMapKey) => {
+      try {
+        const folders = {
+          userProfilePic: "employee_profile_images",
+          resume: "employee_resumes",
+          coverLetterFile: "employee_cover_letters",
+          passport: "employee_passports",
+          educationCertificate: "employee_education_certificates",
+          policeClearance: "employee_police_clearance",
+          mofaAttestation: "employee_mofa_attestation"
+        };
+        const folder = folders[folderMapKey] || "employee_documents";
+
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: folder,
+          resource_type: "auto",
+        });
+
+        // Delete local file after upload
+        fs.unlink(file.path, (err) => {
+          if (err) console.error("Error deleting local file:", err);
+        });
+
+        return result.secure_url;
+      } catch (err) {
+        console.error("Cloudinary upload error:", err);
+        return `/uploads/${file.filename}`;
+      }
+    };
+
     // Handle uploaded files
     if (req.files.userProfilePic) {
       updateData.userProfilePic = {
         name: req.files.userProfilePic[0].originalname,
-        url: `/uploads/${req.files.userProfilePic[0].filename}`,
+        url: await uploadToCloudinary(req.files.userProfilePic[0], "userProfilePic"),
       };
     }
 
     if (req.files.resume) {
       updateData.resume = {
         name: req.files.resume[0].originalname,
-        url: `/uploads/${req.files.resume[0].filename}`,
+        url: await uploadToCloudinary(req.files.resume[0], "resume"),
       };
     }
 
     if (req.files.coverLetterFile) {
       updateData.coverLetterFile = {
         name: req.files.coverLetterFile[0].originalname,
-        url: `/uploads/${req.files.coverLetterFile[0].filename}`,
+        url: await uploadToCloudinary(req.files.coverLetterFile[0], "coverLetterFile"),
       };
     }
 
     if (req.files.passport) {
       updateData.passport = {
         name: req.files.passport[0].originalname,
-        url: `/uploads/${req.files.passport[0].filename}`,
+        url: await uploadToCloudinary(req.files.passport[0], "passport"),
         expiryDate: body.passportExpiryDate,
       };
     }
@@ -1975,21 +2007,21 @@ const editUserData = async (req, res) => {
     if (req.files.educationCertificate) {
       updateData.educationCertificate = {
         name: req.files.educationCertificate[0].originalname,
-        url: `/uploads/${req.files.educationCertificate[0].filename}`,
+        url: await uploadToCloudinary(req.files.educationCertificate[0], "educationCertificate"),
       };
     }
 
     if (req.files.policeClearance) {
       updateData.policeClearance = {
         name: req.files.policeClearance[0].originalname,
-        url: `/uploads/${req.files.policeClearance[0].filename}`,
+        url: await uploadToCloudinary(req.files.policeClearance[0], "policeClearance"),
       };
     }
 
     if (req.files.mofaAttestation) {
       updateData.mofaAttestation = {
         name: req.files.mofaAttestation[0].originalname,
-        url: `/uploads/${req.files.mofaAttestation[0].filename}`,
+        url: await uploadToCloudinary(req.files.mofaAttestation[0], "mofaAttestation"),
       };
     }
 
@@ -2366,17 +2398,21 @@ const getDistinctCategoryLocation = async (req, res) => {
     // Get distinct categories
     const categories = await Job.distinct("category");
 
-
     const regions = await Job.distinct("region");
     const experience = await Job.distinct("experienceLevel");
 
-    // Combine locations + regions and get unique values
-    const allLocations = Array.from(new Set([...regions]));
+    // Normalize and deduplicate categories
+    const normalizedCategories = categories.map(c => c ? c.trim().toUpperCase() : "");
+    const allCategories = Array.from(new Set(normalizedCategories)).filter(Boolean);
+
+    // Normalize and deduplicate locations (replace hyphens and trim)
+    const normalizedRegions = regions.map(r => r ? r.replace(/[-\s]+/g, ' ').trim().toUpperCase() : "");
+    const allLocations = Array.from(new Set(normalizedRegions)).filter(Boolean);
 
     return res.status(200).json({
       success: true,
       message: "Distinct categories and locations fetched successfully",
-      categories: categories.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
+      categories: allCategories.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
       locations: allLocations.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
       experience: experience.sort((a, b) => a.localeCompare(b)), // sorted alphabetically
     });

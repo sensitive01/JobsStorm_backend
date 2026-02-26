@@ -429,8 +429,7 @@ const getEmployerDetailsTopBar = async (req, res) => {
     }
 
     const employer = await userModel
-      .findById(employerId, { contactPerson: 1, companyName: 1 })
-
+      .findById(employerId, { contactPerson: 1, companyName: 1, userProfilePic: 1 })
 
     if (!employer) {
       return res.status(404).json({ message: "Employer not found" });
@@ -471,10 +470,10 @@ const updateEmployerDetails = async (req, res) => {
     const updatedEmployer = await userModel.findByIdAndUpdate(
       req.params.id,
       {
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        userEmail: req.body.userEmail,
-        userMobile: req.body.userMobile,
+        companyName: req.body.companyName,
+        contactPerson: req.body.contactPerson,
+        contactEmail: req.body.contactEmail,
+        mobileNumber: req.body.mobileNumber,
         address: req.body.address,
         state: req.body.state,
         pincode: req.body.pincode,
@@ -483,6 +482,9 @@ const updateEmployerDetails = async (req, res) => {
         website: req.body.website,
         board: req.body.board,
         institutionType: req.body.institutionType,
+        linkedin: req.body.linkedin,
+        twitter: req.body.twitter,
+        facebook: req.body.facebook,
       },
       { new: true }
     );
@@ -1391,6 +1393,67 @@ const getSuggestedCandidates = async (req, res) => {
 
 
 
+const updateCoverPicture = async (req, res) => {
+  try {
+    const { employid } = req.params;
+
+    if (!employid || !mongoose.isValidObjectId(employid)) {
+      return res.status(400).json({ message: "Valid employee ID is required" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const result = req.file;
+
+    const fileUrl = result.secure_url || result.url || result.path;
+    if (!fileUrl) {
+      return res.status(500).json({
+        message: "Cloudinary upload failed: No URL returned",
+        details: result,
+      });
+    }
+
+    const currentEmployee = await userModel.findById(employid);
+    if (!currentEmployee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    if (currentEmployee.userCoverPic) {
+      try {
+        const publicId = currentEmployee.userCoverPic
+          .split("/")
+          .slice(-2)
+          .join("/")
+          .split(".")[0];
+        // Note: cloudinary.uploader.destroy(publicId) could be called here
+      } catch (err) {
+        console.error("Failed to parse old cover picture:", err);
+      }
+    }
+
+    currentEmployee.userCoverPic = fileUrl;
+    await currentEmployee.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Cover picture updated successfully",
+      file: {
+        name: result.originalname || result.filename || "Unnamed",
+        url: fileUrl,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating cover picture:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while updating cover picture",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getSuggestedCandidates,
   getInterviewDetails,
@@ -1413,5 +1476,6 @@ module.exports = {
   getEmployerDetails,
   updateEmployerDetails,
   updateProfilePicture,
+  updateCoverPicture,
   employerChangeMyPassword,
 };

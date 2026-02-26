@@ -22,10 +22,10 @@ exports.sendMessage = async (req, res) => {
     } = req.body;
 
     // Validation
-    if (!employeeId || !employerId || !jobId || !sender) {
+    if (!employeeId || !employerId || !sender) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: employeeId, employerId, jobId, sender",
+        message: "Missing required fields: employeeId, employerId, sender",
       });
     }
 
@@ -69,8 +69,8 @@ exports.sendMessage = async (req, res) => {
             resourceType === "image"
               ? "chat_images"
               : resourceType === "video"
-              ? "chat_media"
-              : "chat_documents",
+                ? "chat_media"
+                : "chat_documents",
         });
 
         mediaUrl = result.secure_url;
@@ -96,20 +96,23 @@ exports.sendMessage = async (req, res) => {
     };
 
     // Find or create chat
+    const query = { employeeId, employerId };
+    if (jobId) query.jobId = jobId;
+
     // Note: Removed unreadCountEmployer and unreadCountEmployee from $setOnInsert
     // to avoid conflict with $inc. They have default values of 0 in the schema.
     const chat = await Chat.findOneAndUpdate(
-      { employeeId, employerId, jobId },
+      query,
       {
         $setOnInsert: {
-          employeeName: employeeName || "",
-          employeeImage: employeeImage || "",
-          employerName: employerName || "",
-          employerImage: employerImage || "",
           position: position || "",
         },
         $push: { messages: newMessage },
         $set: {
+          employeeName: employeeName || undefined,
+          employeeImage: employeeImage || undefined,
+          employerName: employerName || undefined,
+          employerImage: employerImage || undefined,
           lastMessage: newMessage.message,
           lastMessageTime: new Date(),
           updatedAt: new Date(),
@@ -151,14 +154,17 @@ exports.getChatMessages = async (req, res) => {
   try {
     const { employeeId, employerId, jobId } = req.query;
 
-    if (!employeeId || !employerId || !jobId) {
+    if (!employeeId || !employerId) {
       return res.status(400).json({
         success: false,
-        message: "employeeId, employerId, and jobId are required",
+        message: "employeeId and employerId are required",
       });
     }
 
-    const chat = await Chat.findOne({ employeeId, employerId, jobId })
+    const query = { employeeId, employerId };
+    if (jobId) query.jobId = jobId;
+
+    const chat = await Chat.findOne(query)
       .populate("jobId", "jobTitle")
       .sort({ "messages.createdAt": 1 });
 
@@ -342,6 +348,7 @@ exports.getChatsByEmployeeId = async (req, res) => {
       updatedAt: chat.updatedAt,
       unreadCountEmployer: chat.unreadCountEmployer,
       unreadCountEmployee: chat.unreadCountEmployee,
+      messages: chat.messages || [],
       latestMessage: chat.messages && chat.messages.length > 0
         ? chat.messages[chat.messages.length - 1]
         : null,
@@ -370,11 +377,10 @@ exports.markAsRead = async (req, res) => {
   try {
     const { employeeId, employerId, jobId, viewerType } = req.body;
 
-    if (!employeeId || !employerId || !jobId || !viewerType) {
+    if (!employeeId || !employerId || !viewerType) {
       return res.status(400).json({
         success: false,
-        message:
-          "employeeId, employerId, jobId, and viewerType are required",
+        message: "employeeId, employerId, and viewerType are required",
       });
     }
 
@@ -385,7 +391,10 @@ exports.markAsRead = async (req, res) => {
       });
     }
 
-    const chat = await Chat.findOne({ employeeId, employerId, jobId });
+    const query = { employeeId, employerId };
+    if (jobId) query.jobId = jobId;
+
+    const chat = await Chat.findOne(query);
 
     if (!chat) {
       return res.status(404).json({

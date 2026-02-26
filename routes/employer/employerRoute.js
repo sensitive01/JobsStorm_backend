@@ -28,7 +28,7 @@ const {
 } = require("../../config/cloudinary");
 
 // Memory upload for chat
-const memoryUpload = multer({ 
+const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 }).single("file");
@@ -60,7 +60,7 @@ const getCloudinaryParamsForEmployer = (req, file, fileType) => {
   const timestamp = Date.now();
   const originalName = file.originalname.replace(/\.[^/.]+$/, "");
   const employid = req.params.employid || req.body.employerId || req.body.employeeId;
-  
+
   const baseParams = {
     public_id: `${employid}_${fileType}_${originalName}_${timestamp}`,
   };
@@ -114,12 +114,12 @@ const getCloudinaryParamsForEmployer = (req, file, fileType) => {
 
 const dynamicUploadMiddleware = (req, res, next) => {
   const fileType = req.body.fileType || req.query.fileType;
-  
+
   // Use memory storage to get file buffer for compression
   const memoryStorage = multer.memoryStorage();
   const upload = multer({
     storage: memoryStorage,
-    limits: { 
+    limits: {
       fileSize: 50 * 1024 * 1024, // 50MB limit
     },
   }).single("file");
@@ -147,7 +147,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
     (async () => {
       try {
         console.log(`Compressing ${fileType} file: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB)`);
-        
+
         const compressedBuffer = await compressFile(
           req.file.buffer,
           req.file.mimetype,
@@ -162,7 +162,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
         console.log(`Compressed size: ${(compressedBuffer.length / 1024).toFixed(2)}KB`);
 
         const uploadParams = getCloudinaryParamsForEmployer(req, req.file, fileType);
-        
+
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,
           (error, result) => {
@@ -179,7 +179,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
             req.file.url = result.secure_url;
             req.file.public_id = result.public_id;
             req.file.size = compressedBuffer.length;
-            
+
             console.log('File uploaded successfully to Cloudinary');
             next();
           }
@@ -300,7 +300,7 @@ employerRoute.get("/chats/:jobId", chatController.getChatMessagesByJobId);
 employerRoute.get("/chat/employer/:employerId", chatController.getChatsByEmployerId);
 
 // Get all chats for an employee
-employerRoute.get("/chat/employee/:employeeId", chatController.getChatsByEmployeeId);
+employerRoute.get("/chat/employeedata/:employeeId", chatController.getChatsByEmployeeId);
 
 // Mark messages as read
 employerRoute.post("/chat/mark-read", chatController.markAsRead);
@@ -435,6 +435,11 @@ employerRoute.put(
   "/uploadprofilepic/:employid",
   dynamicUploadMiddleware,
   employerController.updateProfilePicture
+);
+employerRoute.put(
+  "/uploadcoverpic/:employid",
+  dynamicUploadMiddleware,
+  employerController.updateCoverPicture
 );
 
 employerRoute.put(

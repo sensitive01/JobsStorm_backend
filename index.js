@@ -32,7 +32,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const allowedOrigins = ["http://localhost:5174","https://www.jobsstorm.com", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com","https://secure.payu.in"];
+const allowedOrigins = ["http://localhost:5174","http://localhost:5175","https://www.jobsstorm.com", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com","https://secure.payu.in"];
 const corsOptions = {
   origin: function (origin, callback) {
     // Check if origin is in allow list or if it is undefined (direct server to server or local tool) or "null" (some redirect scenarios)
@@ -199,6 +199,37 @@ app.use((err, req, res, next) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+const http = require("http");
+const { Server } = require("socket.io");
+
+const server = http.createServer(app);
+
+// Setup Socket.IO Server
+const io = new Server(server, {
+  cors: corsOptions,
+});
+
+io.on("connection", (socket) => {
+  console.log("📞 A user connected via WebSocket:", socket.id);
+
+  // Join a specific chat room
+  socket.on("join_chat_room", (room) => {
+    socket.join(room);
+    console.log(`User ${socket.id} joined room: ${room}`);
+  });
+
+  // Handle incoming messages and broadcast to the room
+  socket.on("send_chat_message", (data) => {
+    // data should contain { room: chatId, messageData: {...} }
+    socket.to(data.room).emit("receive_chat_message", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
+
+// Use the HTTP server to listen, not the raw express app
+server.listen(PORT, () => {
+  console.log(`🚀 Server is running at http://localhost:${PORT}`);
 });

@@ -16,6 +16,7 @@ const emailverifycontroller = require("../../controller/employerController/email
 const subscriptionController = require("../../controller/employeeController/subscriptionController");
 const pricingPlanController = require("../../controller/employeeController/pricingPlanController");
 const orderController = require("../../controller/employeeController/orderController");
+const notificationController = require("../../controller/notificationController");
 
 // ===============================
 // Cloudinary Storage Config
@@ -31,9 +32,9 @@ const {
 // ===============================
 // Default Multer (Local Upload) - Increased file size limit
 // ===============================
-const upload = multer({ 
+const upload = multer({
   dest: "uploads/",
-  limits: { 
+  limits: {
     fileSize: 50 * 1024 * 1024, // 50MB limit
     fieldSize: 50 * 1024 * 1024  // 50MB for fields
   }
@@ -66,7 +67,7 @@ const getCloudinaryParams = (req, file, fileType) => {
   const timestamp = Date.now();
   const originalName = file.originalname.replace(/\.[^/.]+$/, "");
   const employid = req.params.employid || req.params.employeeId || req.body.employeeId;
-  
+
   const baseParams = {
     public_id: `${employid}_${fileType}_${originalName}_${timestamp}`,
   };
@@ -164,16 +165,16 @@ const getCloudinaryParams = (req, file, fileType) => {
 // ===============================
 const normalizeFileType = (fileType) => {
   if (!fileType) return null;
-  
+
   // Convert to lowercase and trim
   let normalized = String(fileType).toLowerCase().trim();
-  
+
   // Remove common file extensions and extra words (more aggressive)
   normalized = normalized
     .replace(/\s*(pdf|jpg|jpeg|png|doc|docx|image|file|document)\s*/gi, '')
     .replace(/\s+/g, '') // Remove all spaces
     .trim();
-  
+
   // Map common variations to standard types (expanded list)
   const typeMap = {
     'passport': 'passport',
@@ -207,13 +208,13 @@ const normalizeFileType = (fileType) => {
     'coverletterpdf': 'coverLetter',
     'cover': 'coverLetter',
   };
-  
+
   // Try exact match first
   if (typeMap[normalized]) {
     console.log(`FileType matched exactly: "${normalized}" -> "${typeMap[normalized]}"`);
     return typeMap[normalized];
   }
-  
+
   // Try partial match (contains) - check if normalized contains any key
   for (const [key, value] of Object.entries(typeMap)) {
     if (normalized.includes(key) || key.includes(normalized)) {
@@ -221,7 +222,7 @@ const normalizeFileType = (fileType) => {
       return value;
     }
   }
-  
+
   // If still not found, try to extract the main word
   const mainWords = ['passport', 'education', 'police', 'mofa', 'profile', 'resume', 'cover', 'certificate', 'cert'];
   for (const word of mainWords) {
@@ -244,7 +245,7 @@ const normalizeFileType = (fileType) => {
       return result;
     }
   }
-  
+
   // Return as-is if nothing matches (might be a valid type)
   console.log(`FileType not matched, returning as-is: "${normalized}"`);
   return normalized;
@@ -263,7 +264,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
   console.log('Query:', JSON.stringify(req.query));
   console.log('Body keys:', Object.keys(req.body || {}));
   console.log('Headers filetype:', req.headers["filetype"]);
-  
+
   let fileType =
     req.query.fileType || req.headers["filetype"] || req.body.fileType;
 
@@ -272,12 +273,12 @@ const dynamicUploadMiddleware = (req, res, next) => {
   // Normalize the fileType
   const originalFileType = fileType;
   fileType = normalizeFileType(fileType);
-  
+
   console.log(`✅ FileType normalization: "${originalFileType}" -> "${fileType}"`);
 
   if (!fileType) {
     console.error('❌ Invalid or missing fileType');
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
       message: "Invalid or missing fileType",
       received: originalFileType
@@ -287,7 +288,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
   // Store normalized fileType in request for controller to use
   req.body.fileType = fileType;
   req.query.fileType = fileType;
-  
+
   console.log('📝 Stored normalized fileType in request');
 
   // Define allowed file types for each fileType
@@ -342,7 +343,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
   // File filter function
   const fileFilter = (req, file, cb) => {
     const fileTypeConfig = allowedFileTypes[fileType];
-    
+
     if (!fileTypeConfig) {
       console.error(`❌ Unknown fileType: ${fileType}`);
       return cb(new Error(`Unknown file type: ${fileType}`), false);
@@ -350,7 +351,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
 
     // Check mimetype
     const isValidMimetype = fileTypeConfig.mimetypes.includes(file.mimetype.toLowerCase());
-    
+
     // Check file extension
     const fileExtension = path.extname(file.originalname).toLowerCase();
     const isValidExtension = fileTypeConfig.extensions.includes(fileExtension);
@@ -374,7 +375,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
   const upload = multer({
     storage: memoryStorage,
     fileFilter: fileFilter,
-    limits: { 
+    limits: {
       fileSize: 50 * 1024 * 1024, // 50MB limit (increased for large files before compression)
     },
   }).single("file");
@@ -388,37 +389,37 @@ const dynamicUploadMiddleware = (req, res, next) => {
         name: err.name,
         stack: err.stack
       });
-      
+
       if (err.code === "LIMIT_FILE_SIZE") {
         console.error('❌ File size limit exceeded');
         return res
           .status(400)
-          .json({ 
+          .json({
             success: false,
             message: "File size exceeds 50MB limit",
             error: "LIMIT_FILE_SIZE"
           });
       }
-      
+
       // Handle file type validation errors
       if (err.message && err.message.includes('Invalid file type')) {
         console.error('❌ Invalid file type uploaded');
         return res
           .status(400)
-          .json({ 
+          .json({
             success: false,
             message: err.message,
             error: "INVALID_FILE_TYPE",
             fileType: fileType
           });
       }
-      
+
       console.error('❌ Unknown upload error:', err);
       return res
         .status(500)
-        .json({ 
+        .json({
           success: false,
-          message: "Upload error", 
+          message: "Upload error",
           error: err.message,
           code: err.code
         });
@@ -426,12 +427,12 @@ const dynamicUploadMiddleware = (req, res, next) => {
 
     if (!req.file) {
       console.error('❌ No file uploaded in request');
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "No file uploaded" 
+        message: "No file uploaded"
       });
     }
-    
+
     console.log('✅ File received:', {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
@@ -449,7 +450,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
 
         // Compress the file before uploading to Cloudinary
         console.log(`[${fileType}] Starting compression for: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)}KB, ${req.file.mimetype})`);
-        
+
         let compressedBuffer;
         try {
           // For PDFs, don't compress (Cloudinary handles PDF optimization)
@@ -457,9 +458,9 @@ const dynamicUploadMiddleware = (req, res, next) => {
           const isImage = req.file.mimetype.startsWith('image/');
           const isPDF = req.file.mimetype === 'application/pdf';
           const compressionThreshold = isImage ? 2 * 1024 * 1024 : Infinity; // 2MB for images, never compress PDFs
-          
+
           console.log(`[${fileType}] File type: ${isImage ? 'Image' : isPDF ? 'PDF' : 'Other'}, Size: ${(req.file.size / 1024).toFixed(2)}KB`);
-          
+
           compressedBuffer = await compressFile(
             req.file.buffer,
             req.file.mimetype,
@@ -470,7 +471,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
               maxFileSize: compressionThreshold
             }
           );
-          
+
           const compressionRatio = ((1 - compressedBuffer.length / req.file.size) * 100).toFixed(1);
           console.log(`[${fileType}] Compression result: ${(compressedBuffer.length / 1024).toFixed(2)}KB (${compressionRatio > 0 ? compressionRatio + '% reduction' : 'no compression'})`);
         } catch (compressError) {
@@ -482,24 +483,24 @@ const dynamicUploadMiddleware = (req, res, next) => {
 
         // Upload compressed file to Cloudinary
         const uploadParams = getCloudinaryParams(req, req.file, fileType);
-        
+
         if (!uploadParams) {
           console.error(`[${fileType}] Failed to get Cloudinary params for fileType: ${fileType}`);
           throw new Error(`Invalid file type: ${fileType}. Please use one of: profileImage, resume, coverLetter, passport, educationCertificate, policeClearance, mofaAttestation`);
         }
-        
+
         console.log(`[${fileType}] Uploading to Cloudinary:`, JSON.stringify({
           folder: uploadParams.folder,
           resource_type: uploadParams.resource_type,
           public_id: uploadParams.public_id?.substring(0, 50) + '...'
         }));
-        
+
         // Set up upload with timeout (longer for larger files)
         // Calculate timeout based on file size: 10 seconds per MB, minimum 60 seconds, maximum 5 minutes
         const fileSizeMB = compressedBuffer.length / (1024 * 1024);
         const timeoutMs = Math.max(60000, Math.min(300000, fileSizeMB * 10000));
         console.log(`[${fileType}] Setting upload timeout to ${(timeoutMs / 1000).toFixed(0)} seconds for ${fileSizeMB.toFixed(2)}MB file`);
-        
+
         const uploadTimeout = setTimeout(() => {
           if (!res.headersSent) {
             console.error(`[${fileType}] Upload timeout after ${(timeoutMs / 1000).toFixed(0)} seconds`);
@@ -511,12 +512,12 @@ const dynamicUploadMiddleware = (req, res, next) => {
             });
           }
         }, timeoutMs);
-        
+
         const uploadStream = cloudinary.uploader.upload_stream(
           uploadParams,
           (error, result) => {
             clearTimeout(uploadTimeout);
-            
+
             if (error) {
               console.error(`[${fileType}] Cloudinary upload error:`, {
                 message: error.message,
@@ -554,7 +555,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
             req.file.url = result.secure_url;
             req.file.public_id = result.public_id;
             req.file.size = compressedBuffer.length; // Update size to compressed size
-            
+
             console.log(`[${fileType}] ✅ File uploaded successfully to Cloudinary: ${result.secure_url.substring(0, 50)}...`);
             console.log(`[${fileType}] 📤 Proceeding to controller...`);
             next();
@@ -584,7 +585,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
         const bufferStream = new Readable();
         bufferStream.push(compressedBuffer);
         bufferStream.push(null);
-        
+
         bufferStream.on('error', (bufferError) => {
           clearTimeout(uploadTimeout);
           console.error(`[${fileType}] Buffer stream error:`, bufferError);
@@ -597,7 +598,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
             });
           }
         });
-        
+
         bufferStream.pipe(uploadStream);
       } catch (compressionError) {
         console.log('='.repeat(80));
@@ -616,7 +617,7 @@ const dynamicUploadMiddleware = (req, res, next) => {
           hasBuffer: !!req.file?.buffer
         });
         console.log('='.repeat(80));
-        
+
         // Ensure we send JSON response, not HTML
         if (!res.headersSent) {
           console.log(`[${fileType}] 📤 Sending error response to client`);
@@ -626,8 +627,8 @@ const dynamicUploadMiddleware = (req, res, next) => {
             error: compressionError.message || "Processing error",
             errorType: compressionError.name || "UNKNOWN_ERROR",
             fileType: fileType,
-            ...(process.env.NODE_ENV === 'development' && { 
-              stack: compressionError.stack 
+            ...(process.env.NODE_ENV === 'development' && {
+              stack: compressionError.stack
             })
           });
         } else {
@@ -656,6 +657,12 @@ employeeRoute.get("/get-job-storm-card-data/:employeeId", employeeController.get
 employeeRoute.get("/is-candidate-subscribed/:employeeId", employeeController.isCandidateSubscribed);
 employeeRoute.get("/get-candidate-dashboard-data/:candidateId", employeeController.geCandidateDashboardData);
 employeeRoute.get("/get-all-categories", employeeController.getAllCategories);
+employeeRoute.get("/get-notifications/:userId", notificationController.getNotifications);
+employeeRoute.put("/mark-notification-read/:notificationId", notificationController.markAsRead);
+
+const resourceController = require("../../controller/resourceController");
+employeeRoute.get("/get-all-resources", resourceController.getAllResources);
+
 
 employeeRoute.get("/fetchallemployee", employeeController.getAllEmployees);
 employeeRoute.get("/fetchemployee/:id", employeeController.getEmployeeDetails);

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const planSchema = new mongoose.Schema({
-    employerid: {
+  employerid: {
     type: String,
 
   },
@@ -79,6 +79,32 @@ const planSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  tagline: {
+    type: String,
+    trim: true
+  },
+  iconType: {
+    type: String,
+    enum: ["bolt", "star", "shield"],
+    default: "bolt"
+  },
+  isPopular: {
+    type: Boolean,
+    default: false
+  },
+  buttonText: {
+    type: String,
+    default: "Current Plan"
+  },
+  billingCycle: {
+    type: String,
+    enum: ["monthly", "yearly", "custom"],
+    default: "monthly"
+  },
+  featuresList: [{
+    text: { type: String, required: true },
+    included: { type: Boolean, default: true }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -86,7 +112,7 @@ const planSchema = new mongoose.Schema({
 });
 
 // Calculate total price with GST
-planSchema.virtual('totalPrice').get(function() {
+planSchema.virtual('totalPrice').get(function () {
   return this.price + (this.price * this.gstPercentage / 100);
 });
 
