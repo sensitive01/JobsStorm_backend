@@ -1197,6 +1197,7 @@ const getInterviewDetails = async (req, res) => {
           interviewType: "$applications.interviewType",
           interviewDate: "$applications.interviewDate",
           interviewTime: "$applications.interviewTime",
+          interviewEndTime: "$applications.interviewEndTime",
           interviewLink: "$applications.interviewLink",
           interviewVenue: "$applications.interviewVenue",
           applicationStatus: "$applications.status",
@@ -1454,7 +1455,67 @@ const updateCoverPicture = async (req, res) => {
   }
 };
 
+const generalAIChat = async (req, res) => {
+  try {
+    const { message, chatHistory = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Message is required" });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: "Gemini API key is not configured",
+      });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // Format chat history for Gemini
+    const history = chatHistory
+      .filter(msg => msg.content && msg.role) // Ensure valid messages
+      .map((msg) => ({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      }));
+
+    // Gemini expects history to start with user if it's not empty, 
+    // or at least be alternating. Our welcome message is from assistant.
+    // Let's ensure the history is valid.
+    const validHistory = history.length > 0 && history[0].role === 'model'
+      ? [{ role: 'user', parts: [{ text: 'Hello' }] }, ...history]
+      : history;
+
+    const chat = model.startChat({
+      history: validHistory,
+      generationConfig: {
+        maxOutputTokens: 1000,
+      },
+    });
+
+    const result = await chat.sendMessage(message);
+    const response = await result.response;
+    const text = response.text();
+
+    res.status(200).json({
+      success: true,
+      data: text,
+    });
+  } catch (error) {
+    console.error("AI Chat Error Details:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while communicating with the AI",
+      error: error.message,
+      details: error.stack
+    });
+  }
+};
+
 module.exports = {
+  generalAIChat,
   getSuggestedCandidates,
   getInterviewDetails,
   getDashboardData,

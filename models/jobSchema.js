@@ -11,6 +11,7 @@ const applicationSchema = new mongoose.Schema({
   interviewType: { type: String },
   interviewDate: { type: Date },
   interviewTime: { type: String },
+  interviewEndTime: { type: String },
   interviewLink: { type: String },
   interviewVenue: { type: String },
   lastUpdateStatusDate: { type: Date },
@@ -19,6 +20,7 @@ const applicationSchema = new mongoose.Schema({
       interviewType: { type: String },
       interviewDate: { type: Date },
       interviewTime: { type: String },
+      interviewEndTime: { type: String },
       interviewLink: { type: String },
       interviewVenue: { type: String },
       status: { type: String },
@@ -38,7 +40,7 @@ const applicationSchema = new mongoose.Schema({
   employApplicantStatus: { type: String, default: "Pending" },
   appliedDate: { type: Date, default: Date.now },
   notes: { type: String },
-  coverLetter:{ type: String }
+  coverLetter: { type: String }
 });
 
 // Saved jobs schema
@@ -50,10 +52,10 @@ const savedJobsSchema = new mongoose.Schema({
 // Main Job schema
 const jobSchema = new mongoose.Schema(
   {
-    jobId:{type:String},
+    jobId: { type: String },
     // Basic Info
     companyName: { type: String, },
-    employId: { type: String }, 
+    employId: { type: String },
     jobTitle: { type: String, },
     description: { type: String, },
     category: { type: String, },
@@ -62,12 +64,12 @@ const jobSchema = new mongoose.Schema(
     jobType: { type: String }, // Full-time, Part-time
     experienceLevel: { type: String },
     educationLevel: { type: String },
-    responsibilities:[],
-    qualifications:[],
-    locationTypes:[],
-    isRemote:{type:Boolean},
-    jobDescription:{type: String},
-    companyWebsite:{type:String},
+    responsibilities: [],
+    qualifications: [],
+    locationTypes: [],
+    isRemote: { type: Boolean },
+    jobDescription: { type: String },
+    companyWebsite: { type: String },
 
     // Salary
     salaryFrom: { type: Number },

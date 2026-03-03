@@ -1285,6 +1285,8 @@ const updateCandidateJobApplicationStatus = async (req, res) => {
       application.interviewDate = additionalData.interviewDate;
     if (additionalData.interviewTime)
       application.interviewTime = additionalData.interviewTime;
+    if (additionalData.interviewEndTime)
+      application.interviewEndTime = additionalData.interviewEndTime;
     if (additionalData.interviewNotes)
       application.notes = additionalData.interviewNotes;
     if (additionalData.interviewLink)
@@ -1300,6 +1302,8 @@ const updateCandidateJobApplicationStatus = async (req, res) => {
         additionalData.interviewDate || application.interviewDate || null,
       interviewTime:
         additionalData.interviewTime || application.interviewTime || "",
+      interviewEndTime:
+        additionalData.interviewEndTime || application.interviewEndTime || "",
       interviewLink:
         additionalData.interviewLink || application.interviewLink || "",
       interviewVenue:

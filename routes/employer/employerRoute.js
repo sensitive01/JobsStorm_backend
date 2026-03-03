@@ -232,6 +232,7 @@ employerRoute.get("/get-suggested-candidates/:employerId", employerController.ge
 
 
 employerRoute.get("/fetchemployer/:id", employerController.getEmployerDetails);
+employerRoute.post("/ai-chat", employerController.generalAIChat);
 employerRoute.get("/fetchjobs", jobController.getAllJobs);
 employerRoute.get("/fetchappliedcand/:id", jobController.getAppliedCandidates);
 employerRoute.get(

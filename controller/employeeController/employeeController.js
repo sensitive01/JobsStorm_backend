@@ -2655,6 +2655,35 @@ const getAllCategories = async (req, res) => {
 };
 
 
+const getBlogById = async (req, res) => {
+  try {
+    const { blogId } = req.params;
+    const blog = await blogSchema.findById(blogId);
+
+    if (!blog) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Blog fetched successfully",
+      blog: blog,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching blog by ID:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching blog",
+      error: err.message,
+    });
+  }
+};
+
+
 //hbh
 module.exports = {
   getAllCategories,
@@ -2664,6 +2693,7 @@ module.exports = {
   getRandomBlogs,
   getDistinctCategoryLocation,
   getAllBlogs,
+  getBlogById,
   getFeaturedJobs,
   getCompanyNameOrJobName,
   getSavedJobDetails,

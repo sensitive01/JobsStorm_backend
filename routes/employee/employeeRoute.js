@@ -652,6 +652,7 @@ employeeRoute.get("/get-jobs-by-type/:jobType", employeeController.getFeaturedJo
 employeeRoute.get("/get-all-blogs", employeeController.getAllBlogs);
 employeeRoute.get("/get-distict-category-location", employeeController.getDistinctCategoryLocation);
 employeeRoute.get("/get-random-blogs", employeeController.getRandomBlogs);
+employeeRoute.get("/get-blog-by-id/:blogId", employeeController.getBlogById);
 employeeRoute.get("/get-candidate-transaction-history/:employeeId", orderController.getEmployeeOrders);
 employeeRoute.get("/get-job-storm-card-data/:employeeId", employeeController.getJobStormCardData);
 employeeRoute.get("/is-candidate-subscribed/:employeeId", employeeController.isCandidateSubscribed);
