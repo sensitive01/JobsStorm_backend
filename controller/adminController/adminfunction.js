@@ -6,6 +6,7 @@ const Employer = require("../../models/employerSchema");
 const Employee = require("../../models/employeeschema");
 const Employeradmin = require("../../models/employeradminSchema");
 const Blog = require("../../models/blogSchema");
+const Order = require("../../models/orderSchema");
 
 const Job = require("../../models/jobSchema");
 // Approve a single employer
@@ -496,6 +497,8 @@ exports.getRegisteredCandidates = async (req, res) => {
         isVerified: 1,
         verificationstatus: 1,
         emailverifedstatus: 1,
+        subscription: 1,
+        subscriptionActive: 1,
         createdAt: 1,
       }
     ).sort({ createdAt: -1 }); // latest first
@@ -1005,5 +1008,88 @@ exports.activateEmployeePlan = async (req, res) => {
       message: "Server error",
       error: error.message
     });
+  }
+};
+
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const transactions = await Order.aggregate([
+      { $match: { isDeleted: { $ne: true } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "employees",
+          let: { eId: "$employeeId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$uuid", "$$eId"] },
+                    {
+                      $and: [
+                        { $cond: { if: { $gt: [{ $strLenCP: { $ifNull: ["$$eId", ""] } }, 23] }, then: true, else: false } },
+                        { $eq: ["$_id", { $convert: { input: "$$eId", to: "objectId", onError: null, onNull: null } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: "employeeDetails"
+        }
+      },
+      {
+        $lookup: {
+          from: "employers",
+          let: { empId: "$employerid" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$uuid", "$$empId"] },
+                    {
+                      $and: [
+                        { $cond: { if: { $gt: [{ $strLenCP: { $ifNull: ["$$empId", ""] } }, 23] }, then: true, else: false } },
+                        { $eq: ["$_id", { $convert: { input: "$$empId", to: "objectId", onError: null, onNull: null } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: "employerDetails"
+        }
+      },
+      {
+        $addFields: {
+          candidateName: { $arrayElemAt: ["$employeeDetails.userName", 0] },
+          candidateEmail: { $arrayElemAt: ["$employeeDetails.userEmail", 0] },
+          companyName: { $arrayElemAt: ["$employerDetails.companyName", 0] },
+          companyEmail: { $arrayElemAt: ["$employerDetails.contactEmail", 0] },
+          contactPerson: { $arrayElemAt: ["$employerDetails.contactPerson", 0] }
+        }
+      },
+      { $project: { employeeDetails: 0, employerDetails: 0 } }
+    ]);
+
+    res.json({ success: true, data: transactions });
+  } catch (error) {
+    console.error("❌ Error fetching transactions:", error);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
+exports.deleteTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Order.findByIdAndUpdate(id, { isDeleted: true });
+    res.json({ success: true, message: "Transaction soft-deleted successfully" });
+  } catch (error) {
+    console.error("❌ Error deleting transaction:", error);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };

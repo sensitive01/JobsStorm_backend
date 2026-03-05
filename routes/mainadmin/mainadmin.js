@@ -179,6 +179,9 @@ mainadminRoute.get("/get-resources/:id", resourceController.getResourceById);
 mainadminRoute.put("/update-resource-data/:id", resourceController.updateResource);
 mainadminRoute.delete("/delete-resource-data/:id", resourceController.deleteResource);
 
+mainadminRoute.get("/get-all-transactions", adminfunction.getAllTransactions);
+mainadminRoute.delete("/delete-transaction/:id", adminfunction.deleteTransaction);
+
 /* ────────────────────────────────────────────────
    ✅ EXPORT ROUTER
 ──────────────────────────────────────────────── */
