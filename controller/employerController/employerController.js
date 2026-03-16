@@ -568,44 +568,75 @@ const updateProfilePicture = async (req, res) => {
 
 const employerForgotPassword = async (req, res) => {
   try {
-    const { userMobile } = req.body;
+    const { userEmail } = req.body;
 
-    const existUser = await userModel.findOne({ userMobile: userMobile });
+    if (!userEmail) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const existUser = await userModel.findOne({ contactEmail: userEmail });
 
     if (!existUser) {
       return res.status(404).json({
-        message: "User not found with the provided contact number",
+        message: "No employer account found with this email address",
       });
     }
 
-    if (!userMobile) {
-      return res.status(400).json({ message: "Mobile number is required" });
-    }
-
     const otp = generateOTP();
-    console.log("Generated OTP:", otp);
+    console.log("Generated OTP for employer:", otp);
 
     req.app.locals.otp = otp;
+    req.app.locals.otpEmail = userEmail;
+
+    // Try to send email; still return OTP in response as fallback
+    try {
+      const otpEmailHtml = `
+<div style="font-family: Arial, sans-serif; padding:30px; max-width:600px; margin:auto; border-radius:10px; background-color:#1a1a1a; color:#f0f0f0;">
+  <div style="text-align:center; padding-bottom:20px; border-bottom:1px solid #333;">
+    <img src="cid:jobsstormlogo" alt="JobsStorm Logo" style="max-height:60px; margin-bottom:10px;" />
+    <h2 style="color:#ffffff;">Password Reset OTP</h2>
+  </div>
+  <p style="font-size:16px;">You requested to reset your password for your JobsStorm Employer account.</p>
+  <div style="text-align:center; margin:30px 0;">
+    <div style="background:#7c3aed; display:inline-block; padding:16px 40px; border-radius:10px;">
+      <span style="font-size:36px; font-weight:bold; letter-spacing:10px; color:#ffffff;">${otp}</span>
+    </div>
+  </div>
+  <p style="font-size:14px; color:#cccccc;">This OTP is valid for 10 minutes. Do not share it with anyone.</p>
+  <p style="font-size:14px; margin-top:30px; color:#cccccc;">
+    Best regards,<br/>
+    The <b>JobsStorm – Global Career Partner</b> Team
+  </p>
+  <div style="text-align:center; margin-top:20px; font-size:12px; color:#888888;">
+    Developed by <a href="https://sensitive.co.in" style="color:#ff6600; text-decoration:none;">Sensitive Technologies</a>
+  </div>
+</div>`;
+      await sendEmail(userEmail, "Your OTP to Reset Employer Password – JobsStorm", otpEmailHtml);
+      console.log("OTP email sent to employer:", userEmail);
+    } catch (emailErr) {
+      console.error("Failed to send OTP email (will return in response):", emailErr.message);
+    }
 
     return res.status(200).json({
-      message: "OTP sent successfully",
-      otp: otp,
+      message: "OTP generated successfully",
+      otp: otp, // returned as fallback in case email fails
+      success: true,
     });
   } catch (err) {
-    console.log("Error in sending OTP in forgot password:", err);
+    console.log("Error in employer forgot password:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
 const employerverifyOTP = async (req, res) => {
   try {
-    const { otp } = req.body;
+    const { otp, userEmail } = req.body;
 
     if (!otp) {
       return res.status(400).json({ message: "OTP is required" });
     }
 
-    if (req.app.locals.otp) {
+    if (req.app.locals.otp && req.app.locals.otpEmail === userEmail) {
       if (otp == req.app.locals.otp) {
         return res.status(200).json({
           message: "OTP verified successfully",
@@ -628,40 +659,38 @@ const employerverifyOTP = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 const employerChangePassword = async (req, res) => {
   try {
-    console.log("Welcome to user change password");
-
-    const { companyEmail, password, confirmPassword } = req.body;
+    const { userEmail, newPassword } = req.body;
 
     // Validate inputs
-    if (!companyEmail || !password || !confirmPassword) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    // Check if passwords match
-    if (password !== confirmPassword) {
-      return res.status(400).json({ message: "Passwords do not match" });
+    if (!userEmail || !newPassword) {
+      return res.status(400).json({ message: "Email and new password are required" });
     }
 
     // Hash the new password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Find the user by contact number
-    const user = await userModel.findOne({ contactEmail: companyEmail });
+    // Find the user by contact Email
+    const user = await userModel.findOne({ contactEmail: userEmail });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Update the user's password field
-    user.userPassword = hashedPassword;
+    // Update the user's password field (schema uses 'password')
+    user.password = hashedPassword;
+
+    // Clear current OTP
+    req.app.locals.otp = null;
+    req.app.locals.otpEmail = null;
 
     // Save the updated user to trigger schema validation and middleware
     await user.save();
 
     // Send success response
-    res.status(200).json({ message: "Password updated successfully" });
+    res.status(200).json({ message: "Password updated successfully", success: true });
   } catch (err) {
     console.error("Error in user change password:", err);
     res.status(500).json({ message: "Internal server error" });

@@ -16,6 +16,7 @@ const chatController = require("../../controller/employerController/chatControll
 const certificatecontroller = require("../../controller/employerController/certificationControleler");
 const savecontroller = require("../../controller/employerController/savedCandiateControlller");
 const OrderController = require("../../controller/employeeController/orderController");
+const employeeController = require("../../controller/employeeController/employeeController");
 
 const {
   profileImageStorage,
@@ -416,6 +417,7 @@ employerRoute.post(
 
 employerRoute.post("/google", employerController.googleAuth);
 employerRoute.post("/apple", employerController.appleAuth);
+employerRoute.post("/apply-job/:jobId/:candidateId", employeeController.applyForJob);
 
 // ================================================================
 // ==========================  PUT ROUTES  =========================

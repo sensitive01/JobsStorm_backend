@@ -67,13 +67,6 @@ mainadminRoute.delete("/deleteplan/:id", planController.deletePlan);
 mainadminRoute.post("/activate-employee-plan", adminfunction.activateEmployeePlan);
 
 /* ────────────────────────────────────────────────
-   📋 EMPLOYEE PLAN MANAGEMENT (ADMIN)
-──────────────────────────────────────────────── */
-mainadminRoute.get("/get-all-plans", adminPlanController.getPricingPlans);
-mainadminRoute.put("/update-plan/:id", adminPlanController.updatePlan);
-mainadminRoute.delete("/delete-plan/:id", adminPlanController.deletePlan);
-
-/* ────────────────────────────────────────────────
    🧾 EMPLOYER & EMPLOYEE APPROVALS
 ──────────────────────────────────────────────── */
 mainadminRoute.put("/approveemployer/:id", adminfunction.approveSingleEmployer);
@@ -182,7 +175,8 @@ mainadminRoute.delete("/delete-resource-data/:id", resourceController.deleteReso
 mainadminRoute.get("/get-all-transactions", adminfunction.getAllTransactions);
 mainadminRoute.delete("/delete-transaction/:id", adminfunction.deleteTransaction);
 
-/* ────────────────────────────────────────────────
-   ✅ EXPORT ROUTER
-──────────────────────────────────────────────── */
+const colleagueController = require("../../controller/employeeController/employeeController");
+mainadminRoute.get("/get-all-jobs-list", adminfunction.getAllJobsList);
+mainadminRoute.post("/apply-job/:jobId/:candidateId", colleagueController.applyForJob);
+
 module.exports = mainadminRoute;

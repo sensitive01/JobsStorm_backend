@@ -268,9 +268,23 @@ const applyForJob = async (req, res) => {
     const { jobId, candidateId } = req.params;
     console.log("jobId, candidateId ", jobId, candidateId);
     const { uploadedFileUrl, coverLetter } = req.body;
+
+    // Check if duplicate application
+    const existingApplication = await Job.findOne({
+      _id: jobId,
+      "applications.applicantId": candidateId
+    });
+
+    if (existingApplication) {
+      return res.status(400).json({
+        success: false,
+        message: "Candidate has already applied to this job",
+      });
+    }
+
     const candidateData = await Employee.findOne(
       { _id: candidateId },
-      { userName: 1, subscription: 1 }
+      { userName: 1, userEmail: 1, userMobile: 1, subscription: 1, resume: 1 }
     );
 
     if (!candidateData) {
@@ -317,8 +331,8 @@ const applyForJob = async (req, res) => {
       email: candidateData.userEmail,
       phone: candidateData.userMobile,
       resume: {
-        name: `${candidateData.userName}_resume.pdf`,
-        url: uploadedFileUrl || "",
+        name: uploadedFileUrl ? `${candidateData.userName}_resume.pdf` : (candidateData.resume?.name || `${candidateData.userName}_resume.pdf`),
+        url: uploadedFileUrl || candidateData.resume?.url || "",
       },
       coverLetter,
       status: "Applied",

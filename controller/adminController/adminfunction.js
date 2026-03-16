@@ -1093,3 +1093,23 @@ exports.deleteTransaction = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+exports.getAllJobsList = async (req, res) => {
+  try {
+    const jobs = await Job.find({}, { jobTitle: 1, companyName: 1 }).sort({
+      createdAt: -1,
+    });
+    res.status(200).json({
+      success: true,
+      count: jobs.length,
+      data: jobs,
+    });
+  } catch (error) {
+    console.error("Error fetching all jobs list:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
