@@ -221,12 +221,14 @@ exports.updateJobStatus = async (req, res) => {
 exports.blockunblockemployer = async (req, res) => {
   try {
     const { id } = req.params;
-    const { blockstatus } = req.body; // Accept from client
+    let { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res
-        .status(400)
-        .json({ message: "Verification status is required" });
+      const currentEmployer = await Employer.findById(id);
+      if (!currentEmployer) {
+        return res.status(404).json({ message: "Employer not found" });
+      }
+      blockstatus = currentEmployer.blockstatus === "block" ? "unblock" : "block";
     }
 
     const employer = await Employer.findByIdAndUpdate(
@@ -266,12 +268,14 @@ exports.updateallblock = async (req, res) => {
 exports.blockunblockemployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { blockstatus } = req.body; // Accept from client
+    let { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res
-        .status(400)
-        .json({ message: "Verification status is required" });
+      const currentEmployee = await Employee.findById(id);
+      if (!currentEmployee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      blockstatus = currentEmployee.blockstatus === "block" ? "unblock" : "block";
     }
 
     const employer = await Employee.findByIdAndUpdate(
@@ -296,12 +300,14 @@ exports.blockunblockemployee = async (req, res) => {
 exports.blockunblockemployeradmin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { blockstatus } = req.body; // Accept from client
+    let { blockstatus } = req.body; // Accept from client
 
     if (!blockstatus) {
-      return res
-        .status(400)
-        .json({ message: "Verification status is required" });
+      const currentEmployerAdmin = await Employeradmin.findById(id);
+      if (!currentEmployerAdmin) {
+        return res.status(404).json({ message: "Employer admin not found" });
+      }
+      blockstatus = currentEmployerAdmin.blockstatus === "block" ? "unblock" : "block";
     }
 
     const employer = await Employeradmin.findByIdAndUpdate(
@@ -478,6 +484,46 @@ exports.getEmployerDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching employer details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+exports.updateEmployerDetails = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+    const { updatedData } = req.body;
+
+    if (!employerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employer ID is required",
+      });
+    }
+
+    const updatedEmployer = await Employer.findByIdAndUpdate(
+      employerId,
+      { ...updatedData, updatedAt: Date.now() },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedEmployer) {
+      return res.status(404).json({
+        success: false,
+        message: "Employer not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Employer updated successfully",
+      data: updatedEmployer,
+    });
+  } catch (error) {
+    console.error("Error updating employer:", error);
     res.status(500).json({
       success: false,
       message: "Server Error",
@@ -1079,6 +1125,57 @@ exports.getAllTransactions = async (req, res) => {
     res.json({ success: true, data: transactions });
   } catch (error) {
     console.error("❌ Error fetching transactions:", error);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
+exports.getEmployerTransactions = async (req, res) => {
+  try {
+    const { employerId } = req.params;
+    const transactions = await Order.aggregate([
+      {
+        $match: {
+          $or: [{ employerid: employerId }, { employerid: { $eq: employerId } }],
+          isDeleted: { $ne: true },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "employers",
+          let: { empId: "$employerid" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$uuid", "$$empId"] },
+                    {
+                      $and: [
+                        { $cond: { if: { $gt: [{ $strLenCP: { $ifNull: ["$$empId", ""] } }, 23] }, then: true, else: false } },
+                        { $eq: ["$_id", { $convert: { input: "$$empId", to: "objectId", onError: null, onNull: null } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: "employerDetails",
+        },
+      },
+      {
+        $addFields: {
+          companyName: { $arrayElemAt: ["$employerDetails.companyName", 0] },
+          companyEmail: { $arrayElemAt: ["$employerDetails.contactEmail", 0] },
+        },
+      },
+      { $project: { employerDetails: 0 } },
+    ]);
+
+    res.json({ success: true, data: transactions });
+  } catch (error) {
+    console.error("❌ Error fetching employer transactions:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };

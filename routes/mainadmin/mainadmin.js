@@ -111,6 +111,7 @@ mainadminRoute.get("/getallemployers", adminfunction.getAllEmployers);
 mainadminRoute.put("/approve-employer/:employerId", adminfunction.approveEmployer);
 mainadminRoute.put("/reject-employer/:employerId", adminfunction.rejectEmployer);
 mainadminRoute.get("/get-employer-details/:employerId", adminfunction.getEmployerDetails);
+mainadminRoute.put("/update-employer-details/:employerId", adminfunction.updateEmployerDetails);
 mainadminRoute.get("/get-registerd-candidate", adminfunction.getRegisteredCandidates);
 mainadminRoute.get("/get-candidate-details/:candidateId", adminfunction.getCandidateDetails);
 mainadminRoute.get("/get-all-company-details", adminfunction.getRegisteredCompanyData);
@@ -173,6 +174,7 @@ mainadminRoute.put("/update-resource-data/:id", resourceController.updateResourc
 mainadminRoute.delete("/delete-resource-data/:id", resourceController.deleteResource);
 
 mainadminRoute.get("/get-all-transactions", adminfunction.getAllTransactions);
+mainadminRoute.get("/get-employer-transactions/:employerId", adminfunction.getEmployerTransactions);
 mainadminRoute.delete("/delete-transaction/:id", adminfunction.deleteTransaction);
 
 const colleagueController = require("../../controller/employeeController/employeeController");
