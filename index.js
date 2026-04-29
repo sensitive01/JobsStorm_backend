@@ -32,7 +32,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const allowedOrigins = ["http://localhost:5174","http://localhost:5175","https://www.jobsstorm.com", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobsstorm.com", "https://admin.jobsstorm.com", "https://employer.jobsstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com","https://secure.payu.in"];
+const allowedOrigins = ["https://jobstorms.com","http://localhost:5174","http://localhost:5175","https://www.jobstorm.com", "http://localhost:5173", "https://job-storm-frontend.vercel.app", "https://job-strom-employer.vercel.app", "https://job-strom-employer.vercel.app", "https://jobsstorm-admin-panel.vercel.app", "https://jobstorm.com", "https://admin.jobstorm.com", "https://employer.jobstorm.com", "https://test.payu.in", "http://localhost:4000","https://api.jobsstorm.com","https://secure.payu.in"];
 const corsOptions = {
   origin: function (origin, callback) {
     // Check if origin is in allow list or if it is undefined (direct server to server or local tool) or "null" (some redirect scenarios)
